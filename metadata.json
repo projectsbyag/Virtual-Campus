@@ -1,0 +1,8 @@
+{
+  "name": "Virtual Campus - E-Learning & Campus AI Platform",
+  "description": "Modern e-learning and student collaboration platform featuring courses, assignments, study resources, campus discussions, and Campus AI assistant.",
+  "requestFrame": false,
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
