@@ -53,7 +53,7 @@ export const DiscussionDetailView: React.FC<DiscussionDetailViewProps> = ({
       <div>
         <button
           onClick={onBack}
-          className="text-primary dark:text-primaryLight hover:underline text-sm font-medium flex items-center space-x-2"
+          className="text-black dark:text-white hover:underline text-sm font-medium flex items-center space-x-2"
         >
           <i className="fas fa-arrow-left text-xs"></i>
           <span>Back to Discussions</span>
@@ -71,7 +71,7 @@ export const DiscussionDetailView: React.FC<DiscussionDetailViewProps> = ({
             <div className="flex items-center space-x-2">
               <button
                 onClick={() => onAskAi(discussion)}
-                className="text-xs text-primary dark:text-primaryLight hover:underline font-medium flex items-center space-x-1"
+                className="text-xs text-black dark:text-white hover:underline font-medium flex items-center space-x-1"
               >
                 <i className="fas fa-robot text-xs"></i>
                 <span>Explain with AI</span>
@@ -81,7 +81,7 @@ export const DiscussionDetailView: React.FC<DiscussionDetailViewProps> = ({
                 onClick={() => onUpvote(discussion._id)}
                 className="px-2.5 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-750 flex items-center space-x-1"
               >
-                <i className="fas fa-arrow-up text-xs text-primary"></i>
+                <i className="fas fa-arrow-up text-xs text-black dark:text-white"></i>
                 <span>{discussion.upvotes}</span>
               </button>
             </div>
@@ -156,7 +156,7 @@ export const DiscussionDetailView: React.FC<DiscussionDetailViewProps> = ({
           <div className="flex justify-end">
             <button
               type="submit"
-              className="px-4 py-2 bg-primary hover:bg-primaryDark text-white text-xs font-semibold rounded-lg transition"
+              className="px-4 py-2 bg-black hover:bg-neutral-800 text-white dark:bg-white dark:text-black dark:hover:bg-neutral-200 text-xs font-semibold rounded-lg transition"
             >
               Post Reply
             </button>
@@ -189,7 +189,7 @@ export const DiscussionDetailView: React.FC<DiscussionDetailViewProps> = ({
                       {reply.author.firstName} {reply.author.lastName}
                     </span>
                     {reply.author.role === 'instructor' && (
-                      <span className="px-1.5 py-0.5 rounded bg-primary text-white text-[10px] font-bold">
+                      <span className="px-1.5 py-0.5 rounded bg-black text-white dark:bg-white dark:text-black text-[10px] font-bold">
                         Instructor
                       </span>
                     )}

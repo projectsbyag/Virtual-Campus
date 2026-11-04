@@ -25,6 +25,7 @@ export interface Course {
   color?: string;
   creditUnits?: number;
   studentsCount?: number;
+  maxStudents?: number;
   instructor: {
     _id: string;
     firstName: string;
@@ -35,7 +36,21 @@ export interface Course {
   department?: string;
   semester?: string;
   isEnrolled?: boolean;
+  isTeaching?: boolean;
+  enrollmentCode?: string;
+  joinLink?: string;
   syllabus?: { week: number; topic: string; details: string }[];
+}
+
+export interface AssignmentSubmission {
+  student: string | User;
+  studentName?: string;
+  studentEmail?: string;
+  submittedAt: string;
+  fileUrl?: string;
+  fileName?: string;
+  grade?: number;
+  feedback?: string;
 }
 
 export interface Assignment {
@@ -46,10 +61,12 @@ export interface Assignment {
   points: number;
   totalPoints?: number;
   course: Course | string;
+  courseCode?: string;
+  courseName?: string;
   status: 'pending' | 'submitted' | 'graded';
   grade?: number;
   feedback?: string;
-  submissions?: { student: string | User; submittedAt: string; fileUrl?: string }[];
+  submissions?: AssignmentSubmission[];
 }
 
 export interface Resource {
@@ -89,6 +106,8 @@ export interface Discussion {
   title: string;
   content: string;
   course: Course | string;
+  courseCode?: string;
+  courseName?: string;
   author: {
     firstName: string;
     lastName: string;

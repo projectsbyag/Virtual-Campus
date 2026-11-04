@@ -500,7 +500,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <div className="pt-2">
                   <button
                     onClick={handleSaveAccessibility}
-                    className="px-4 py-2 bg-primary hover:bg-primaryDark text-white text-xs font-semibold rounded-lg transition"
+                    className="px-4 py-2 bg-black hover:bg-neutral-800 text-white dark:bg-white dark:text-black dark:hover:bg-neutral-200 text-xs font-semibold rounded-lg transition"
                   >
                     Save Accessibility Preferences
                   </button>

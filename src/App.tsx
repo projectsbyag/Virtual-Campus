@@ -138,16 +138,32 @@ export default function App() {
 
   const [isLoggingInDemo, setIsLoggingInDemo] = useState(false);
 
-  const handleQuickDemoLogin = async () => {
+  const handleQuickDemoLogin = async (demoRole: 'student' | 'instructor' = 'student') => {
     setIsLoggingInDemo(true);
     try {
-      const { user } = await apiService.login('alex.johnson@campus.edu', 'Password123!');
+      const email = demoRole === 'instructor' ? 'prof.turing@campus.edu' : 'alex.johnson@campus.edu';
+      const password = 'Password123!';
+      let user: User;
+
+      try {
+        const res = await apiService.login(email, password);
+        user = res.user;
+      } catch {
+        const name = demoRole === 'instructor' ? 'Alan Turing' : 'Alex Johnson';
+        const department = 'Computer Science';
+        const res = await apiService.register(name, email, department, demoRole, password);
+        user = res.user;
+      }
+
       setCurrentUser(user);
       setCurrentView('dashboard');
-      showToast(`Welcome to Campus, ${user.firstName}! (Student Demo)`, 'success');
+      showToast(
+        `Welcome to Campus, ${user.firstName}! (${demoRole === 'instructor' ? 'Faculty Instructor Demo' : 'Student Demo'})`,
+        'success'
+      );
       await loadLiveData();
     } catch (err: any) {
-      showToast(err?.message || 'Unable to log in as demo student. Please check network.', 'error');
+      showToast(err?.message || `Unable to log in as demo ${demoRole}. Please check network.`, 'error');
     } finally {
       setIsLoggingInDemo(false);
     }
@@ -342,18 +358,27 @@ export default function App() {
       />
 
       {/* Main Content Area (exact former #content) */}
-      <main id="content" className="flex-1 p-4 sm:p-6 lg:p-8 min-w-0 overflow-y-auto">
+      <main
+        id="content"
+        className={`flex-1 min-w-0 ${
+          currentView === 'campus-ai'
+            ? 'p-2 sm:p-4 h-[calc(100vh-4rem)] md:h-screen overflow-hidden flex flex-col'
+            : 'p-4 sm:p-6 lg:p-8 overflow-y-auto'
+        }`}
+      >
         {currentView === 'dashboard' && currentUser && (
           <DashboardView
             currentUser={currentUser}
             courses={courses}
             assignments={assignments}
             discussions={discussions}
+            announcements={announcements}
             setCurrentView={setCurrentView}
             onSelectCourse={handleSelectCourse}
             onSelectAssignment={() => setCurrentView('assignments')}
             onSelectDiscussion={handleSelectDiscussion}
             onAskAiPrompt={handleAskAiPrompt}
+            onRefreshData={loadLiveData}
           />
         )}
 

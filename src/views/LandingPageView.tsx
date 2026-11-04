@@ -7,7 +7,7 @@ interface LandingPageViewProps {
   onGetStarted: () => void;
   onSignUp: () => void;
   onLogin: () => void;
-  onQuickDemo?: () => void | Promise<void>;
+  onQuickDemo?: (role?: 'student' | 'instructor') => void | Promise<void>;
   isLoggingInDemo?: boolean;
   onEnterDashboard: () => void;
   onSelectCourse?: (courseId: string) => void;
@@ -31,18 +31,20 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
   onToggleTheme,
 }) => {
   const [activeFaq, setActiveFaq] = useState<number | null>(null);
-  const [demoLoading, setDemoLoading] = useState(false);
+  const [activeDemoRole, setActiveDemoRole] = useState<'student' | 'instructor' | null>(null);
 
   const toggleFaq = (index: number) => {
     setActiveFaq(activeFaq === index ? null : index);
   };
 
-  const handleQuickDemoClick = async () => {
+  const handleQuickDemoClick = async (role: 'student' | 'instructor' = 'student') => {
+    setActiveDemoRole(role);
     if (onQuickDemo) {
-      await onQuickDemo();
+      await onQuickDemo(role);
     } else {
       onLogin();
     }
+    setActiveDemoRole(null);
   };
 
   // Preview courses (fallback to standard academic list if backend courses not yet loaded)
@@ -136,7 +138,7 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
                 </span>
               </a>
               <a href="#how-it-works" className="hover:text-black dark:hover:text-white transition">How It Works</a>
-              <a href="#testimonials" className="hover:text-black dark:hover:text-white transition">Testimonials</a>
+              <a href="#capabilities" className="hover:text-black dark:hover:text-white transition">Capabilities</a>
               <a href="#faq" className="hover:text-black dark:hover:text-white transition">FAQ</a>
             </div>
 
@@ -192,16 +194,28 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
               ) : (
                 /* Unauthenticated State in Navbar */
                 <div className="flex items-center space-x-2">
-                  <button
-                    id="navQuickDemoBtn"
-                    onClick={handleQuickDemoClick}
-                    disabled={demoLoading || isLoggingInDemo}
-                    className="hidden sm:inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-black dark:text-white bg-neutral-100 dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition cursor-pointer"
-                    title="Instant sandbox login as student Alex Johnson"
-                  >
-                    <i className={`fas ${(demoLoading || isLoggingInDemo) ? 'fa-spinner fa-spin' : 'fa-bolt text-black dark:text-white'}`}></i>
-                    <span>{(demoLoading || isLoggingInDemo) ? 'Accessing...' : '1-Click Demo'}</span>
-                  </button>
+                  <div className="hidden sm:flex items-center gap-1.5 p-1 rounded-lg bg-neutral-100 dark:bg-neutral-850 border border-neutral-300 dark:border-neutral-700">
+                    <button
+                      id="navQuickStudentDemoBtn"
+                      onClick={() => handleQuickDemoClick('student')}
+                      disabled={Boolean(activeDemoRole) || isLoggingInDemo}
+                      className="px-2.5 py-1 rounded-md text-xs font-bold text-black dark:text-white hover:bg-white dark:hover:bg-neutral-700 transition cursor-pointer flex items-center gap-1"
+                      title="Instant student login as Alex Johnson"
+                    >
+                      <i className={`fas ${activeDemoRole === 'student' ? 'fa-spinner fa-spin' : 'fa-user-graduate'}`}></i>
+                      <span>Student</span>
+                    </button>
+                    <button
+                      id="navQuickInstructorDemoBtn"
+                      onClick={() => handleQuickDemoClick('instructor')}
+                      disabled={Boolean(activeDemoRole) || isLoggingInDemo}
+                      className="px-2.5 py-1 rounded-md text-xs font-bold text-black dark:text-white hover:bg-white dark:hover:bg-neutral-700 transition cursor-pointer flex items-center gap-1"
+                      title="Instant instructor login as Prof. Alan Turing"
+                    >
+                      <i className={`fas ${activeDemoRole === 'instructor' ? 'fa-spinner fa-spin' : 'fa-chalkboard-teacher'}`}></i>
+                      <span>Instructor</span>
+                    </button>
+                  </div>
 
                   <button
                     id="navLoginBtn"
@@ -237,7 +251,7 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
           {/* Announcement Badge */}
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-neutral-100 dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 text-xs sm:text-sm font-semibold mb-6 shadow-xs">
             <span className="flex h-2 w-2 rounded-full bg-black dark:bg-white"></span>
-            <span>Fall 2026 Academic Portal Active • Integrated with Campus AI Tutor</span>
+            <span>Spring 2026 Academic Portal Active • Integrated with Campus AI Tutor</span>
             <i className="fas fa-chevron-right text-[10px]"></i>
           </div>
 
@@ -254,8 +268,8 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
             Organize enrolled courses, submit assignments with verified timestamps, share campus study resources, and elevate your learning with 24/7 AI-assisted tutoring.
           </p>
 
-          {/* Dual Action CTAs */}
-          <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-3.5 max-w-xl mx-auto">
+          {/* Dual Action CTAs & 1-Click Demos */}
+          <div className="mt-10 flex flex-col items-center justify-center gap-4 max-w-2xl mx-auto">
             {currentUser ? (
               <button
                 onClick={onEnterDashboard}
@@ -266,33 +280,47 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
               </button>
             ) : (
               <>
-                <button
-                  id="heroQuickDemoBtn"
-                  onClick={handleQuickDemoClick}
-                  disabled={demoLoading || isLoggingInDemo}
-                  className="w-full sm:w-auto px-7 py-3.5 bg-black hover:bg-neutral-800 text-white dark:bg-white dark:hover:bg-neutral-200 dark:text-black text-base font-bold rounded-xl shadow-md border border-black dark:border-white transition transform hover:-translate-y-0.5 flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-75"
-                >
-                  <i className={`fas ${(demoLoading || isLoggingInDemo) ? 'fa-spinner fa-spin' : 'fa-bolt'}`}></i>
-                  <span>{(demoLoading || isLoggingInDemo) ? 'Launching Student Demo...' : '⚡ 1-Click Student Demo'}</span>
-                </button>
+                <div className="flex flex-col sm:flex-row items-center gap-3 w-full justify-center">
+                  <button
+                    id="heroQuickStudentDemoBtn"
+                    onClick={() => handleQuickDemoClick('student')}
+                    disabled={Boolean(activeDemoRole) || isLoggingInDemo}
+                    className="w-full sm:w-auto px-6 py-3.5 bg-black hover:bg-neutral-800 text-white dark:bg-white dark:hover:bg-neutral-200 dark:text-black text-sm font-bold rounded-xl shadow-md border border-black dark:border-white transition transform hover:-translate-y-0.5 flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-75"
+                  >
+                    <i className={`fas ${activeDemoRole === 'student' ? 'fa-spinner fa-spin' : 'fa-user-graduate'}`}></i>
+                    <span>{activeDemoRole === 'student' ? 'Loading Student...' : '⚡ 1-Click Student Demo'}</span>
+                  </button>
 
-                <button
-                  id="heroSignUpBtn"
-                  onClick={onSignUp}
-                  className="w-full sm:w-auto px-7 py-3.5 bg-white hover:bg-neutral-50 text-black dark:bg-neutral-900 dark:hover:bg-neutral-850 dark:text-white text-base font-bold rounded-xl border-2 border-black dark:border-white shadow-sm transition transform hover:-translate-y-0.5 flex items-center justify-center space-x-2 cursor-pointer"
-                >
-                  <i className="fas fa-user-plus text-sm"></i>
-                  <span>Sign Up Free</span>
-                </button>
+                  <button
+                    id="heroQuickInstructorDemoBtn"
+                    onClick={() => handleQuickDemoClick('instructor')}
+                    disabled={Boolean(activeDemoRole) || isLoggingInDemo}
+                    className="w-full sm:w-auto px-6 py-3.5 bg-neutral-900 hover:bg-neutral-800 text-white dark:bg-neutral-800 dark:hover:bg-neutral-700 dark:text-white text-sm font-bold rounded-xl shadow-md border border-neutral-700 dark:border-neutral-600 transition transform hover:-translate-y-0.5 flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-75"
+                  >
+                    <i className={`fas ${activeDemoRole === 'instructor' ? 'fa-spinner fa-spin' : 'fa-chalkboard-teacher'}`}></i>
+                    <span>{activeDemoRole === 'instructor' ? 'Loading Faculty...' : '👨‍🏫 1-Click Instructor Demo'}</span>
+                  </button>
+                </div>
 
-                <button
-                  id="heroLoginBtn"
-                  onClick={onLogin}
-                  className="w-full sm:w-auto px-6 py-3.5 bg-neutral-100 dark:bg-neutral-900 text-neutral-800 dark:text-neutral-200 text-base font-semibold rounded-xl border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-200 dark:hover:bg-neutral-800 transition flex items-center justify-center space-x-2 shadow-xs cursor-pointer"
-                >
-                  <i className="fas fa-sign-in-alt text-black dark:text-white text-sm"></i>
-                  <span>Log In</span>
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    id="heroSignUpBtn"
+                    onClick={onSignUp}
+                    className="px-5 py-2.5 bg-white hover:bg-neutral-50 text-black dark:bg-neutral-900 dark:hover:bg-neutral-850 dark:text-white text-xs font-bold rounded-lg border border-neutral-300 dark:border-neutral-700 shadow-xs transition flex items-center space-x-1.5 cursor-pointer"
+                  >
+                    <i className="fas fa-user-plus text-xs"></i>
+                    <span>Sign Up Free</span>
+                  </button>
+
+                  <button
+                    id="heroLoginBtn"
+                    onClick={onLogin}
+                    className="px-5 py-2.5 bg-neutral-100 dark:bg-neutral-900 text-neutral-800 dark:text-neutral-200 text-xs font-semibold rounded-lg border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-200 dark:hover:bg-neutral-800 transition flex items-center space-x-1.5 cursor-pointer"
+                  >
+                    <i className="fas fa-sign-in-alt text-xs"></i>
+                    <span>Log In</span>
+                  </button>
+                </div>
               </>
             )}
           </div>
@@ -300,9 +328,9 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
           {/* Quick Demo Access Bar */}
           {!currentUser && (
             <div className="mt-4 flex items-center justify-center">
-              <span className="inline-flex items-center gap-1.5 text-xs text-neutral-500 dark:text-neutral-400 py-1 px-3">
+              <span className="inline-flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400 py-1 px-3">
                 <i className="fas fa-check-circle text-black dark:text-white text-xs"></i>
-                <span>Pre-configured with student <strong className="text-black dark:text-white">Alex Johnson</strong>, enrolled CS101 course, and Campus AI.</span>
+                <span>Instant access without passwords: <strong className="text-black dark:text-white">Alex Johnson (Student)</strong> & <strong className="text-black dark:text-white">Prof. Alan Turing (Faculty)</strong></span>
               </span>
             </div>
           )}
@@ -323,23 +351,23 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
             </div>
           </div>
 
-          {/* Platform Metrics Bar */}
+          {/* Verified System Architecture Highlights */}
           <div className="mt-14 pt-10 border-t border-neutral-200 dark:border-neutral-800 grid grid-cols-2 md:grid-cols-4 gap-6 max-w-4xl mx-auto">
             <div className="p-4 rounded-xl bg-white/60 dark:bg-neutral-900/60 border border-neutral-200 dark:border-neutral-800 shadow-xs">
-              <div className="text-2xl sm:text-3xl font-black text-black dark:text-white">4,850+</div>
-              <div className="text-xs text-neutral-500 dark:text-neutral-400 mt-1 font-medium">Active Students & Faculty</div>
+              <div className="text-xl sm:text-2xl font-black text-black dark:text-white">Render Cloud</div>
+              <div className="text-xs text-neutral-500 dark:text-neutral-400 mt-1 font-medium">Live Node.js & MongoDB API</div>
             </div>
             <div className="p-4 rounded-xl bg-white/60 dark:bg-neutral-900/60 border border-neutral-200 dark:border-neutral-800 shadow-xs">
-              <div className="text-2xl sm:text-3xl font-black text-black dark:text-white">140+</div>
-              <div className="text-xs text-neutral-500 dark:text-neutral-400 mt-1 font-medium">Accredited Courses</div>
+              <div className="text-xl sm:text-2xl font-black text-black dark:text-white">Campus AI</div>
+              <div className="text-xs text-neutral-500 dark:text-neutral-400 mt-1 font-medium">Curriculum Proofs & Tutoring</div>
             </div>
             <div className="p-4 rounded-xl bg-white/60 dark:bg-neutral-900/60 border border-neutral-200 dark:border-neutral-800 shadow-xs">
-              <div className="text-2xl sm:text-3xl font-black text-black dark:text-white">99.2%</div>
-              <div className="text-xs text-neutral-500 dark:text-neutral-400 mt-1 font-medium">On-Time Submissions</div>
+              <div className="text-xl sm:text-2xl font-black text-black dark:text-white">Role-Based</div>
+              <div className="text-xs text-neutral-500 dark:text-neutral-400 mt-1 font-medium">Student & Faculty Portals</div>
             </div>
             <div className="p-4 rounded-xl bg-white/60 dark:bg-neutral-900/60 border border-neutral-200 dark:border-neutral-800 shadow-xs">
-              <div className="text-2xl sm:text-3xl font-black text-black dark:text-white">24 / 7</div>
-              <div className="text-xs text-neutral-500 dark:text-neutral-400 mt-1 font-medium">Campus AI Tutor Available</div>
+              <div className="text-xl sm:text-2xl font-black text-black dark:text-white">Monochrome</div>
+              <div className="text-xs text-neutral-500 dark:text-neutral-400 mt-1 font-medium">High-Contrast B&W Theme</div>
             </div>
           </div>
 
@@ -789,96 +817,66 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
         </div>
       </section>
 
-      {/* ==================== TESTIMONIALS ==================== */}
-      <section id="testimonials" className="py-20 bg-gray-50 dark:bg-gray-900/40 border-t border-gray-200 dark:border-gray-800">
+      {/* ==================== PLATFORM CAPABILITIES & WORKFLOW ==================== */}
+      <section id="capabilities" className="py-20 bg-gray-50 dark:bg-gray-900/40 border-t border-gray-200 dark:border-gray-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-2xl mx-auto mb-16">
-            <span className="text-xs font-bold uppercase tracking-wider text-primary dark:text-primaryLight">Social Proof</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-black dark:text-white">Designed For Rigor</span>
             <h2 className="text-3xl font-black text-gray-900 dark:text-white mt-1">
-              Loved by Students & Faculty Alike
+              Purpose-Built for University STEM Workflows
             </h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+              Every view in Virtual Campus is integrated directly with live data from our secure Render backend.
+            </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             
-            {/* Testimonial 1 */}
+            {/* Pillar 1 */}
             <div className="p-6 rounded-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-xs flex flex-col justify-between">
               <div>
-                <div className="flex text-amber-400 text-xs mb-3 space-x-1">
-                  <i className="fas fa-star"></i>
-                  <i className="fas fa-star"></i>
-                  <i className="fas fa-star"></i>
-                  <i className="fas fa-star"></i>
-                  <i className="fas fa-star"></i>
+                <div className="w-10 h-10 rounded-xl bg-black text-white dark:bg-white dark:text-black flex items-center justify-center text-sm font-bold mb-4">
+                  <i className="fas fa-database"></i>
                 </div>
-                <p className="text-xs text-gray-600 dark:text-gray-300 italic leading-relaxed">
-                  "Having all my assignment deadlines, syllabus files, and forum questions in one cohesive interface changed my GPA. Campus AI helped me understand pointers in C++ when office hours were closed."
+                <h3 className="text-base font-bold text-gray-900 dark:text-white mb-2">Live Cloud Persistence</h3>
+                <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">
+                  Authentication tokens, assignments, submissions, discussion upvotes, and course enrollments synchronize with MongoDB in real time.
                 </p>
               </div>
-              <div className="mt-6 pt-4 border-t border-gray-100 dark:border-gray-700 flex items-center space-x-3">
-                <img
-                  src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=128&q=80"
-                  alt="Maya Lin"
-                  className="w-9 h-9 rounded-full object-cover"
-                />
-                <div>
-                  <div className="text-xs font-bold text-gray-900 dark:text-white">Maya Lin</div>
-                  <div className="text-[11px] text-gray-500 dark:text-gray-400">Junior, Computer Science</div>
-                </div>
+              <div className="mt-6 pt-4 border-t border-gray-100 dark:border-gray-700 text-[11px] font-semibold text-neutral-500 dark:text-neutral-400">
+                Live Render API • Node/Express
               </div>
             </div>
 
-            {/* Testimonial 2 */}
+            {/* Pillar 2 */}
             <div className="p-6 rounded-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-xs flex flex-col justify-between">
               <div>
-                <div className="flex text-amber-400 text-xs mb-3 space-x-1">
-                  <i className="fas fa-star"></i>
-                  <i className="fas fa-star"></i>
-                  <i className="fas fa-star"></i>
-                  <i className="fas fa-star"></i>
-                  <i className="fas fa-star"></i>
+                <div className="w-10 h-10 rounded-xl bg-black text-white dark:bg-white dark:text-black flex items-center justify-center text-sm font-bold mb-4">
+                  <i className="fas fa-brain"></i>
                 </div>
-                <p className="text-xs text-gray-600 dark:text-gray-300 italic leading-relaxed">
-                  "As a lecturer, publishing problem sets and sharing lecture slides is instantaneous. The student discussion threads promote real peer learning and prevent repetitive email inquiries."
+                <h3 className="text-base font-bold text-gray-900 dark:text-white mb-2">Grounded Campus AI</h3>
+                <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">
+                  Interactive concept checks, mathematical proof walkthroughs, and code syntax trees aligned directly to your department's course syllabi.
                 </p>
               </div>
-              <div className="mt-6 pt-4 border-t border-gray-100 dark:border-gray-700 flex items-center space-x-3">
-                <img
-                  src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=128&q=80"
-                  alt="Dr. Marcus Vance"
-                  className="w-9 h-9 rounded-full object-cover"
-                />
-                <div>
-                  <div className="text-xs font-bold text-gray-900 dark:text-white">Dr. Marcus Vance</div>
-                  <div className="text-[11px] text-gray-500 dark:text-gray-400">Associate Professor of Mathematics</div>
-                </div>
+              <div className="mt-6 pt-4 border-t border-gray-100 dark:border-gray-700 text-[11px] font-semibold text-neutral-500 dark:text-neutral-400">
+                Grounded Syllabi Citations
               </div>
             </div>
 
-            {/* Testimonial 3 */}
+            {/* Pillar 3 */}
             <div className="p-6 rounded-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-xs flex flex-col justify-between">
               <div>
-                <div className="flex text-amber-400 text-xs mb-3 space-x-1">
-                  <i className="fas fa-star"></i>
-                  <i className="fas fa-star"></i>
-                  <i className="fas fa-star"></i>
-                  <i className="fas fa-star"></i>
-                  <i className="fas fa-star"></i>
+                <div className="w-10 h-10 rounded-xl bg-black text-white dark:bg-white dark:text-black flex items-center justify-center text-sm font-bold mb-4">
+                  <i className="fas fa-universal-access"></i>
                 </div>
-                <p className="text-xs text-gray-600 dark:text-gray-300 italic leading-relaxed">
-                  "The dark mode is easy on the eyes during late night study grinds, and uploading my biology lab reports directly with zero fuss has made this platform my favorite tool all year."
+                <h3 className="text-base font-bold text-gray-900 dark:text-white mb-2">Accessible Editorial UI</h3>
+                <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">
+                  High-contrast black & white styling, clean font scaling, reduced motion toggles, and seamless dark mode designed for late-night study sessions.
                 </p>
               </div>
-              <div className="mt-6 pt-4 border-t border-gray-100 dark:border-gray-700 flex items-center space-x-3">
-                <img
-                  src="https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&w=128&q=80"
-                  alt="David Kim"
-                  className="w-9 h-9 rounded-full object-cover"
-                />
-                <div>
-                  <div className="text-xs font-bold text-gray-900 dark:text-white">David Kim</div>
-                  <div className="text-[11px] text-gray-500 dark:text-gray-400">Sophomore, Biomedical Engineering</div>
-                </div>
+              <div className="mt-6 pt-4 border-t border-gray-100 dark:border-gray-700 text-[11px] font-semibold text-neutral-500 dark:text-neutral-400">
+                Full Dark & Light Support
               </div>
             </div>
 
@@ -946,12 +944,12 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({
               <>
                 <button
                   id="footerQuickDemoBtn"
-                  onClick={handleQuickDemoClick}
-                  disabled={demoLoading || isLoggingInDemo}
+                  onClick={() => handleQuickDemoClick('student')}
+                  disabled={Boolean(activeDemoRole) || isLoggingInDemo}
                   className="w-full sm:w-auto px-7 py-3.5 bg-white hover:bg-neutral-200 text-black font-extrabold rounded-xl shadow-lg transition transform hover:-translate-y-0.5 flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-75"
                 >
-                  <i className={`fas ${(demoLoading || isLoggingInDemo) ? 'fa-spinner fa-spin' : 'fa-bolt text-black'}`}></i>
-                  <span>{(demoLoading || isLoggingInDemo) ? 'Launching Demo...' : '⚡ 1-Click Student Demo'}</span>
+                  <i className={`fas ${(Boolean(activeDemoRole) || isLoggingInDemo) ? 'fa-spinner fa-spin' : 'fa-bolt text-black'}`}></i>
+                  <span>{(Boolean(activeDemoRole) || isLoggingInDemo) ? 'Launching Demo...' : '⚡ 1-Click Student Demo'}</span>
                 </button>
 
                 <button

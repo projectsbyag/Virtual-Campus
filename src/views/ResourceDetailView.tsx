@@ -99,14 +99,14 @@ export const ResourceDetailView: React.FC<ResourceDetailViewProps> = ({
       <div className="flex flex-wrap items-center gap-2">
         <button
           onClick={onBack}
-          className="text-gray-600 dark:text-gray-400 hover:text-primary dark:hover:text-primaryLight text-sm font-medium flex items-center"
+          className="text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white text-sm font-medium flex items-center"
         >
           <i className="fas fa-arrow-left mr-1"></i> Back to Resources
         </button>
         <span className="text-gray-400">•</span>
         <button
           onClick={() => onSelectCourse(courseId)}
-          className="text-gray-600 dark:text-gray-400 hover:text-primary dark:hover:text-primaryLight text-sm font-medium"
+          className="text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white text-sm font-medium"
         >
           {courseCode} ({courseName})
         </button>
@@ -180,7 +180,7 @@ export const ResourceDetailView: React.FC<ResourceDetailViewProps> = ({
               <div className="flex justify-end">
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-primary hover:bg-primaryDark text-white text-xs font-semibold rounded-lg transition"
+                  className="px-4 py-2 bg-black hover:bg-neutral-800 text-white dark:bg-white dark:text-black dark:hover:bg-neutral-200 text-xs font-semibold rounded-lg transition"
                 >
                   Post Comment
                 </button>
@@ -210,7 +210,7 @@ export const ResourceDetailView: React.FC<ResourceDetailViewProps> = ({
 
             <button
               onClick={() => onDownload(resource)}
-              className="w-full px-4 py-2.5 bg-primary hover:bg-primaryDark text-white rounded-lg text-sm font-semibold transition flex items-center justify-center space-x-2"
+              className="w-full px-4 py-2.5 bg-black hover:bg-neutral-800 text-white dark:bg-white dark:text-black dark:hover:bg-neutral-200 rounded-lg text-sm font-semibold transition flex items-center justify-center space-x-2"
             >
               <i className="fas fa-download"></i>
               <span>Download File ({resource.fileSize})</span>
@@ -218,7 +218,7 @@ export const ResourceDetailView: React.FC<ResourceDetailViewProps> = ({
 
             <button
               onClick={() => onAskAi(resource)}
-              className="w-full px-4 py-2.5 border border-primary text-primary dark:text-primaryLight hover:bg-primary/10 rounded-lg text-sm font-semibold transition flex items-center justify-center space-x-2"
+              className="w-full px-4 py-2.5 border border-black/30 dark:border-white/40 text-black dark:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg text-sm font-semibold transition flex items-center justify-center space-x-2"
             >
               <i className="fas fa-robot text-sm"></i>
               <span>Summarize with Campus AI</span>

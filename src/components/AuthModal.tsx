@@ -56,12 +56,24 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  const handleQuickDemo = async () => {
+  const handleQuickDemo = async (demoRole: 'student' | 'instructor' = 'student') => {
     setLoading(true);
+    setError(null);
     try {
-      const { user } = await apiService.login('alex.johnson@campus.edu', 'Password123!');
-      onSuccess(user);
-      onClose();
+      const email = demoRole === 'instructor' ? 'prof.turing@campus.edu' : 'alex.johnson@campus.edu';
+      const password = 'Password123!';
+      try {
+        const { user } = await apiService.login(email, password);
+        onSuccess(user);
+        onClose();
+      } catch {
+        // Fallback: auto-register on Render if not existing yet
+        const name = demoRole === 'instructor' ? 'Alan Turing' : 'Alex Johnson';
+        const dept = 'Computer Science';
+        const { user } = await apiService.register(name, email, dept, demoRole, password);
+        onSuccess(user);
+        onClose();
+      }
     } catch {
       setError('Unable to connect to live Render backend. Please retry.');
     } finally {
@@ -80,34 +92,54 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <i className="fas fa-times text-lg"></i>
         </button>
 
-        <h2 className="text-2xl font-bold mb-6 text-center text-gray-900 dark:text-white">
+        <h2 className="text-2xl font-bold mb-5 text-center text-gray-900 dark:text-white">
           {isRegister ? 'Sign Up for Virtual Campus' : 'Log In to Virtual Campus'}
         </h2>
 
-        {/* 1-Click Student Demo Login */}
+        {/* 1-Click Instant Demo Options: Student + Instructor */}
         <div className="mb-5 p-3.5 rounded-xl bg-neutral-50 dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700">
-          <div className="flex items-center justify-between mb-1.5">
+          <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-bold uppercase tracking-wider text-black dark:text-white flex items-center gap-1.5">
               <i className="fas fa-bolt text-black dark:text-white"></i>
-              Instant Student Sandbox
+              Instant 1-Click Sandbox
             </span>
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-neutral-200 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 font-semibold">
               Live Backend
             </span>
           </div>
-          <p className="text-xs text-gray-600 dark:text-gray-400 mb-2.5 leading-relaxed">
-            Test full student workflows immediately with pre-loaded CS courses, homework submissions, and Campus AI.
+          <p className="text-xs text-gray-600 dark:text-gray-400 mb-3 leading-relaxed">
+            Experience role-specific features immediately with real Render database connections:
           </p>
-          <button
-            type="button"
-            id="modalQuickDemoBtn"
-            onClick={handleQuickDemo}
-            disabled={loading}
-            className="w-full py-2.5 px-4 bg-black hover:bg-neutral-800 text-white dark:bg-white dark:hover:bg-neutral-200 dark:text-black font-bold rounded-lg transition text-xs flex items-center justify-center space-x-2 shadow-sm disabled:opacity-60 cursor-pointer"
-          >
-            <i className={`fas ${loading ? 'fa-spinner fa-spin' : 'fa-bolt'}`}></i>
-            <span>{loading ? 'Logging in demo student...' : '⚡ Launch 1-Click Student Demo'}</span>
-          </button>
+
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              id="modalQuickStudentDemoBtn"
+              onClick={() => handleQuickDemo('student')}
+              disabled={loading}
+              className="py-2.5 px-3 bg-black hover:bg-neutral-800 text-white dark:bg-white dark:hover:bg-neutral-200 dark:text-black font-bold rounded-lg transition text-xs flex flex-col items-center justify-center gap-1 shadow-sm disabled:opacity-60 cursor-pointer text-center"
+            >
+              <span className="flex items-center gap-1.5 font-bold">
+                <i className="fas fa-user-graduate"></i>
+                Student Demo
+              </span>
+              <span className="text-[10px] opacity-75 font-normal">Alex Johnson</span>
+            </button>
+
+            <button
+              type="button"
+              id="modalQuickInstructorDemoBtn"
+              onClick={() => handleQuickDemo('instructor')}
+              disabled={loading}
+              className="py-2.5 px-3 bg-neutral-900 hover:bg-neutral-800 text-white dark:bg-neutral-800 dark:hover:bg-neutral-700 dark:text-white border border-neutral-700 dark:border-neutral-600 font-bold rounded-lg transition text-xs flex flex-col items-center justify-center gap-1 shadow-sm disabled:opacity-60 cursor-pointer text-center"
+            >
+              <span className="flex items-center gap-1.5 font-bold">
+                <i className="fas fa-chalkboard-teacher"></i>
+                Instructor Demo
+              </span>
+              <span className="text-[10px] opacity-75 font-normal">Prof. Alan Turing</span>
+            </button>
+          </div>
         </div>
 
         <div className="relative flex items-center justify-center my-4">
