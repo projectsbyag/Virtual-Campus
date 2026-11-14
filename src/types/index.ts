@@ -12,6 +12,7 @@ export interface User {
   department: string;
   avatarUrl?: string;
   avatar?: string;
+  bio?: string;
   matricNumber?: string;
   enrolledCourses?: string[];
 }
@@ -26,6 +27,7 @@ export interface Course {
   creditUnits?: number;
   studentsCount?: number;
   maxStudents?: number;
+  students?: Array<string | User>;
   instructor: {
     _id: string;
     firstName: string;
@@ -38,19 +40,57 @@ export interface Course {
   isEnrolled?: boolean;
   isTeaching?: boolean;
   enrollmentCode?: string;
+  allowEnrollment?: boolean;
+  isArchived?: boolean;
   joinLink?: string;
+  createdAt?: string;
   syllabus?: { week: number; topic: string; details: string }[];
 }
 
+export interface CourseLink {
+  _id: string;
+  course: string | Course;
+  creator: string | User;
+  token: string;
+  expiresAt?: string;
+  maxUses?: number | null;
+  usedCount: number;
+  isActive: boolean;
+  createdAt: string;
+  isExpired?: boolean;
+  hasReachedMaxUses?: boolean;
+  isValid?: boolean;
+}
+
+export interface SubmissionAttachment {
+  fileName: string;
+  filePath?: string;
+  fileUrl?: string;
+  fileType?: string;
+  fileSize?: number;
+}
+
 export interface AssignmentSubmission {
+  _id?: string;
+  assignment?: string | Assignment;
   student: string | User;
   studentName?: string;
   studentEmail?: string;
+  studentAvatar?: string;
+  textContent?: string;
+  attachments?: SubmissionAttachment[];
   submittedAt: string;
+  status?: 'draft' | 'submitted' | 'late' | 'graded' | 'returned';
+  grade?: {
+    score: number;
+    feedback?: string;
+    gradedBy?: string;
+    gradedAt?: string;
+  } | number;
+  feedback?: string;
   fileUrl?: string;
   fileName?: string;
-  grade?: number;
-  feedback?: string;
+  isLate?: boolean;
 }
 
 export interface Assignment {
@@ -59,26 +99,49 @@ export interface Assignment {
   description: string;
   dueDate: string;
   points: number;
+  pointsPossible?: number;
   totalPoints?: number;
+  submissionType?: 'text' | 'file' | 'both';
+  allowLateSubmissions?: boolean;
+  published?: boolean;
   course: Course | string;
   courseCode?: string;
   courseName?: string;
-  status: 'pending' | 'submitted' | 'graded';
+  status: 'pending' | 'submitted' | 'graded' | 'missed';
   grade?: number;
   feedback?: string;
+  mySubmission?: AssignmentSubmission | null;
   submissions?: AssignmentSubmission[];
+  ungradedCount?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ResourceComment {
+  _id: string;
+  user: string | { _id?: string; firstName: string; lastName: string; email?: string };
+  content: string;
+  createdAt: string;
 }
 
 export interface Resource {
   _id: string;
   title: string;
   description: string;
+  type?: 'file' | 'link' | 'text' | 'video' | 'audio' | 'other';
+  category?: 'lecture' | 'reading' | 'exercise' | 'assignment' | 'tutorial' | 'other';
   fileType: 'pdf' | 'slides' | 'archive' | 'doc';
   fileSize: string;
   fileUrl: string;
+  link?: string;
   downloads: number;
+  isPinned?: boolean;
+  isVisible?: boolean;
+  likes?: string[];
+  comments?: ResourceComment[];
   course: Course | string;
   uploadedBy: {
+    _id?: string;
     firstName: string;
     lastName: string;
     role: string;
@@ -90,6 +153,7 @@ export interface Resource {
 export interface DiscussionReply {
   _id: string;
   author: {
+    _id?: string;
     firstName: string;
     lastName: string;
     avatar?: string;
@@ -109,16 +173,21 @@ export interface Discussion {
   courseCode?: string;
   courseName?: string;
   author: {
+    _id?: string;
     firstName: string;
     lastName: string;
     avatar?: string;
     role: UserRole;
   };
   createdAt: string;
+  updatedAt?: string;
   upvotes: number;
+  views?: number;
   repliesCount: number;
   tags?: string[];
   solved?: boolean;
+  isPinned?: boolean;
+  isLocked?: boolean;
   isAnnouncement?: boolean;
   replies?: DiscussionReply[];
 }
@@ -156,18 +225,18 @@ export interface CampusAIMessage {
   };
 }
 
-export type ActiveView = 
+export type ActiveView =
   | 'landing'
-  | 'dashboard' 
-  | 'courses' 
+  | 'dashboard'
+  | 'courses'
   | 'course-detail'
-  | 'assignments' 
-  | 'resources' 
+  | 'assignments'
+  | 'resources'
   | 'resource-detail'
-  | 'discussions' 
+  | 'discussions'
   | 'discussion-detail'
-  | 'announcements' 
-  | 'campus-ai' 
+  | 'announcements'
+  | 'campus-ai'
   | 'profile'
   | 'settings'
   | 'login'

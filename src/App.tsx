@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { AuthModal } from './components/AuthModal';
+import { AssignmentDetailModal, CreateEditAssignmentModal } from './components/AssignmentModals';
 
 import { LandingPageView } from './views/LandingPageView';
 import { DashboardView } from './views/DashboardView';
@@ -26,6 +27,11 @@ export default function App() {
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
   const [selectedResourceId, setSelectedResourceId] = useState<string | null>(null);
   const [selectedDiscussionId, setSelectedDiscussionId] = useState<string | null>(null);
+
+  // Quick Dashboard Assignment Modal state
+  const [quickAssignment, setQuickAssignment] = useState<Assignment | null>(null);
+  const [quickEditAssignment, setQuickEditAssignment] = useState<Assignment | null>(null);
+  const [showQuickEditModal, setShowQuickEditModal] = useState(false);
 
   const [currentUser, setCurrentUser] = useState<User | null>(() => apiService.getCurrentUser());
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -61,8 +67,15 @@ export default function App() {
     }
   }, [isDark]);
 
+  const showToast = (message: string, type: 'success' | 'info' | 'error' = 'info') => {
+    setToastMessage(message);
+    setToastType(type);
+    setTimeout(() => {
+      setToastMessage(null);
+    }, 3500);
+  };
+
   const loadLiveData = async () => {
-    // Only attempt live data fetch if an authenticated session token exists
     if (!apiService.getToken()) return;
 
     try {
@@ -89,8 +102,44 @@ export default function App() {
     }
   };
 
+  const processPendingJoinLink = async (user: User) => {
+    const token = localStorage.getItem('pendingJoinToken');
+    if (!token) return;
+    localStorage.removeItem('pendingJoinToken');
+
+    if (user.role === 'instructor' || user.role === 'admin') {
+      showToast('Instructors and administrators cannot enroll via student invite links.', 'error');
+      return;
+    }
+
+    try {
+      const joinedCourse = await apiService.joinCourseViaLink(token);
+      await loadLiveData();
+      if (joinedCourse) {
+        setSelectedCourseId(joinedCourse._id);
+        setCurrentView('course-detail');
+        showToast(`Joined ${joinedCourse.code}: ${joinedCourse.name}!`, 'success');
+      } else {
+        showToast('Successfully enrolled via invite link!', 'success');
+      }
+    } catch (err: any) {
+      showToast(err?.message || 'Invite link is invalid, expired, or restricted.', 'error');
+    }
+  };
+
   useEffect(() => {
     let isMounted = true;
+
+    // Detect course invite link (?join= or ?token=) matching HTML app behavior
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const urlToken = params.get('join') || params.get('token');
+      if (urlToken) {
+        localStorage.setItem('pendingJoinToken', urlToken);
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    }
+
     const initAndLoad = async () => {
       try {
         const user = await apiService.initSession();
@@ -98,8 +147,13 @@ export default function App() {
           if (user) {
             setCurrentUser(user);
             await loadLiveData();
+            await processPendingJoinLink(user);
           } else {
             setCurrentUser(null);
+            if (localStorage.getItem('pendingJoinToken')) {
+              setAuthMode('login');
+              setIsAuthOpen(true);
+            }
           }
         }
       } catch (err) {
@@ -111,14 +165,6 @@ export default function App() {
       isMounted = false;
     };
   }, []);
-
-  const showToast = (message: string, type: 'success' | 'info' | 'error' = 'info') => {
-    setToastMessage(message);
-    setToastType(type);
-    setTimeout(() => {
-      setToastMessage(null);
-    }, 3500);
-  };
 
   const handleToggleTheme = () => {
     setIsDark((prev) => !prev);
@@ -162,6 +208,7 @@ export default function App() {
         'success'
       );
       await loadLiveData();
+      await processPendingJoinLink(user);
     } catch (err: any) {
       showToast(err?.message || `Unable to log in as demo ${demoRole}. Please check network.`, 'error');
     } finally {
@@ -174,43 +221,17 @@ export default function App() {
     setCurrentView('dashboard');
     showToast(`Welcome back, ${u.firstName}!`, 'success');
     await loadLiveData();
+    await processPendingJoinLink(u);
   };
 
-  const handleEnrollCourse = async (courseId: string) => {
+  const handleCreateDiscussion = async (
+    title: string,
+    content: string,
+    courseId: string,
+    tags: string[] = ['General']
+  ) => {
     try {
-      const updated = await apiService.enrollCourse(courseId);
-      setCourses([...updated]);
-      showToast('Successfully enrolled in course!', 'success');
-      await loadLiveData();
-    } catch (err: any) {
-      showToast(err?.message || 'Failed to enroll in course', 'error');
-    }
-  };
-
-  const handleSubmitAssignment = async (assignmentId: string, fileName: string) => {
-    try {
-      const updated = await apiService.submitAssignment(assignmentId, fileName);
-      setAssignments((prev) => prev.map((a) => (a._id === assignmentId ? updated : a)));
-      showToast(`Submitted assignment (${fileName})`, 'success');
-    } catch (err: any) {
-      showToast(err?.message || 'Failed to submit assignment', 'error');
-    }
-  };
-
-  const handleUploadResource = async (res: any) => {
-    try {
-      const newRes = await apiService.uploadResource(res);
-      setResources((prev) => [newRes, ...prev]);
-      showToast('Resource published successfully!', 'success');
-      await loadLiveData();
-    } catch (err: any) {
-      showToast(err?.message || 'Failed to upload resource', 'error');
-    }
-  };
-
-  const handleCreateDiscussion = async (title: string, content: string, courseId: string) => {
-    try {
-      const newD = await apiService.createDiscussion(title, content, courseId, ['General']);
+      const newD = await apiService.createDiscussion(title, content, courseId, tags);
       setDiscussions((prev) => [newD, ...prev]);
       showToast('Discussion posted!', 'success');
       await loadLiveData();
@@ -236,24 +257,21 @@ export default function App() {
     );
   };
 
-  const handleDownloadResource = (r: Resource) => {
-    showToast(`Downloading ${r.title}...`, 'info');
-    setResources((prev) =>
-      prev.map((item) => (item._id === r._id ? { ...item, downloads: item.downloads + 1 } : item))
-    );
-  };
-
   const handleAskAiPrompt = (prompt: string) => {
     campusAiService.addUserMessage(prompt);
     setCurrentView('campus-ai');
   };
 
   const handleAskAiCourse = (course: Course) => {
-    handleAskAiPrompt(`Explain the key concepts, syllabus expectations, and exam preparation tips for ${course.code}: ${course.name}.`);
+    handleAskAiPrompt(
+      `Explain the key concepts, syllabus expectations, and exam preparation tips for ${course.code}: ${course.name}.`
+    );
   };
 
   const handleAskAiHint = (assignment: Assignment) => {
-    handleAskAiPrompt(`Give me a conceptual hint on how to solve this homework: "${assignment.title}". Context: "${assignment.description}".`);
+    handleAskAiPrompt(
+      `Give me a conceptual hint on how to solve this homework: "${assignment.title}". Context: "${assignment.description}".`
+    );
   };
 
   const handleAskAiSummarize = (resource: Resource) => {
@@ -279,7 +297,6 @@ export default function App() {
   const selectedResource = resources.find((r) => r._id === selectedResourceId) || resources[0];
   const selectedDiscussion = discussions.find((d) => d._id === selectedDiscussionId) || discussions[0];
 
-  // If in Landing Page mode or if unauthenticated
   if (currentView === 'landing' || !currentUser) {
     return (
       <>
@@ -331,11 +348,8 @@ export default function App() {
     );
   }
 
-  // App container (1-1 with former layout)
   return (
     <div id="appContainer" className="flex flex-col md:flex-row min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
-      
-      {/* Mobile Header (exact former #mobileHeader) */}
       <Header
         currentUser={currentUser}
         onOpenMobileMenu={() => setIsSidebarOpen(true)}
@@ -345,7 +359,6 @@ export default function App() {
         onGoHome={() => setCurrentView('dashboard')}
       />
 
-      {/* Sidebar (exact former #sidebar) */}
       <Sidebar
         currentView={currentView}
         setCurrentView={setCurrentView}
@@ -357,7 +370,6 @@ export default function App() {
         onLogout={handleLogout}
       />
 
-      {/* Main Content Area (exact former #content) */}
       <main
         id="content"
         className={`flex-1 min-w-0 ${
@@ -375,7 +387,7 @@ export default function App() {
             announcements={announcements}
             setCurrentView={setCurrentView}
             onSelectCourse={handleSelectCourse}
-            onSelectAssignment={() => setCurrentView('assignments')}
+            onSelectAssignment={(a) => setQuickAssignment(a)}
             onSelectDiscussion={handleSelectDiscussion}
             onAskAiPrompt={handleAskAiPrompt}
             onRefreshData={loadLiveData}
@@ -387,31 +399,39 @@ export default function App() {
             courses={courses}
             currentUser={currentUser}
             onSelectCourse={handleSelectCourse}
-            onEnroll={handleEnrollCourse}
+            onRefreshData={loadLiveData}
             onAskAiCourse={handleAskAiCourse}
+            onShowToast={showToast}
           />
         )}
 
         {currentView === 'course-detail' && selectedCourse && (
           <CourseDetailView
             course={selectedCourse}
+            currentUser={currentUser}
+            courses={courses}
             assignments={assignments}
             resources={resources}
             discussions={discussions}
+            announcements={announcements}
             onBack={() => setCurrentView('courses')}
-            onEnroll={handleEnrollCourse}
+            onRefreshData={loadLiveData}
             onAskAi={handleAskAiCourse}
-            onSelectAssignment={() => setCurrentView('assignments')}
+            onAskAiHint={handleAskAiHint}
             onSelectResource={handleSelectResource}
             onSelectDiscussion={handleSelectDiscussion}
+            onShowToast={showToast}
           />
         )}
 
         {currentView === 'assignments' && (
           <AssignmentsView
             assignments={assignments}
-            onSubmitAssignment={handleSubmitAssignment}
+            courses={courses}
+            currentUser={currentUser}
+            onRefreshData={loadLiveData}
             onAskAiHint={handleAskAiHint}
+            onShowToast={showToast}
           />
         )}
 
@@ -419,10 +439,11 @@ export default function App() {
           <ResourcesView
             resources={resources}
             courses={courses}
-            onUploadResource={handleUploadResource}
+            currentUser={currentUser}
+            onRefreshData={loadLiveData}
             onAskAiSummarize={handleAskAiSummarize}
-            onDownload={handleDownloadResource}
             onSelectResource={handleSelectResource}
+            onShowToast={showToast}
           />
         )}
 
@@ -431,9 +452,10 @@ export default function App() {
             resource={selectedResource}
             currentUser={currentUser}
             onBack={() => setCurrentView('resources')}
-            onDownload={handleDownloadResource}
             onAskAi={handleAskAiSummarize}
             onSelectCourse={handleSelectCourse}
+            onRefreshData={loadLiveData}
+            onShowToast={showToast}
           />
         )}
 
@@ -441,54 +463,61 @@ export default function App() {
           <DiscussionsView
             discussions={discussions}
             courses={courses}
+            currentUser={currentUser}
             onUpvote={handleUpvoteDiscussion}
             onCreateDiscussion={handleCreateDiscussion}
-            onAddReply={handleAddReply}
             onAskAiDiscussion={(d) =>
               handleAskAiPrompt(`Explain and provide an answer to this discussion: "${d.title}" - "${d.content}"`)
             }
-            selectedDiscussionId={selectedDiscussionId}
             onSelectDiscussion={handleSelectDiscussion}
+            onRefreshData={loadLiveData}
+            onShowToast={showToast}
           />
         )}
 
         {currentView === 'discussion-detail' && selectedDiscussion && (
           <DiscussionDetailView
             discussion={selectedDiscussion}
+            courses={courses}
             currentUser={currentUser}
             onBack={() => setCurrentView('discussions')}
             onAddReply={handleAddReply}
             onUpvote={handleUpvoteDiscussion}
             onAskAi={(d) =>
               handleAskAiPrompt(
-                `Help me answer this discussion question for ${typeof d.course === 'object' ? d.course.code : 'course'}: "${d.title}" - ${d.content}`
+                `Help me answer this discussion question for ${
+                  typeof d.course === 'object' ? d.course.code : 'course'
+                }: "${d.title}" - ${d.content}`
               )
             }
+            onRefreshData={loadLiveData}
+            onShowToast={showToast}
           />
         )}
 
         {currentView === 'announcements' && (
           <AnnouncementsView
             announcements={announcements}
+            courses={courses}
+            currentUser={currentUser}
+            onRefreshData={loadLiveData}
             onAskAiAnnouncement={(item) =>
               handleAskAiPrompt(`Explain this announcement: "${item.title}" - "${item.content}"`)
             }
+            onShowToast={showToast}
           />
         )}
 
-        {currentView === 'campus-ai' && (
-          <CampusAiView onShowToast={showToast} />
-        )}
+        {currentView === 'campus-ai' && <CampusAiView onShowToast={showToast} />}
 
         {currentView === 'profile' && (
           <ProfileView
             currentUser={currentUser}
             courses={courses}
+            assignments={assignments}
             setCurrentView={setCurrentView}
-            onLogout={handleLogout}
-            onUpdateUser={(updated) =>
-              setCurrentUser((prev) => (prev ? { ...prev, ...updated } : null))
-            }
+            onUpdateUser={(updated) => setCurrentUser((prev) => (prev ? { ...prev, ...updated } : null))}
+            onShowToast={showToast}
           />
         )}
 
@@ -497,26 +526,58 @@ export default function App() {
             isDark={isDark}
             onToggleTheme={handleToggleTheme}
             onShowToast={showToast}
+            onAccountDeleted={() => {
+              setCurrentUser(null);
+              setCurrentView('landing');
+            }}
           />
         )}
       </main>
 
-      {/* Former Toast Notification (#toast) */}
+      {/* Dashboard Quick Assignment Modal */}
+      <AssignmentDetailModal
+        assignment={quickAssignment}
+        currentUser={currentUser}
+        courses={courses}
+        onClose={() => setQuickAssignment(null)}
+        onRefresh={loadLiveData}
+        onEditAssignment={(a) => {
+          setQuickEditAssignment(a);
+          setShowQuickEditModal(true);
+        }}
+        onAskAiHint={handleAskAiHint}
+        onShowToast={showToast}
+      />
+
+      <CreateEditAssignmentModal
+        isOpen={showQuickEditModal}
+        onClose={() => {
+          setShowQuickEditModal(false);
+          setQuickEditAssignment(null);
+        }}
+        courses={courses}
+        currentUser={currentUser}
+        editingAssignment={quickEditAssignment}
+        onSaved={async () => {
+          await loadLiveData();
+        }}
+        onShowToast={showToast}
+      />
+
       {toastMessage && (
         <div
           id="toast"
-          className="fixed bottom-4 right-4 z-50 flex items-center p-4 rounded-lg shadow-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm font-medium text-gray-900 dark:text-white transition-opacity duration-300"
+          className="fixed bottom-4 right-4 z-50 flex items-center p-4 rounded-xl shadow-lg bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 text-sm font-medium text-black dark:text-white"
         >
           <div className="mr-3">
-            {toastType === 'success' && <i className="fas fa-check-circle text-green-500 text-lg"></i>}
+            {toastType === 'success' && <i className="fas fa-check-circle text-emerald-500 text-lg"></i>}
             {toastType === 'error' && <i className="fas fa-exclamation-circle text-red-500 text-lg"></i>}
-            {toastType === 'info' && <i className="fas fa-info-circle text-primary text-lg"></i>}
+            {toastType === 'info' && <i className="fas fa-info-circle text-black dark:text-white text-lg"></i>}
           </div>
           <span id="toastMessage">{toastMessage}</span>
         </div>
       )}
 
-      {/* Auth Modal */}
       <AuthModal
         isOpen={isAuthOpen}
         initialMode={authMode}

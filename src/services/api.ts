@@ -1,12 +1,29 @@
-import { User, Course, Assignment, Resource, Discussion, Announcement, DEFAULT_AVATAR } from '../types';
+import {
+  User,
+  Course,
+  CourseLink,
+  Assignment,
+  AssignmentSubmission,
+  Resource,
+  Discussion,
+  Announcement,
+  DEFAULT_AVATAR,
+} from '../types';
 
-// Live backend URL on Render
+const BACKEND_ORIGIN = 'https://project1-1bz0.onrender.com';
+
 const API_BASE_URL: string =
   (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) ||
-  'https://project1-1bz0.onrender.com/api/v1';
+  `${BACKEND_ORIGIN}/api/v1`;
 
-// Normalization Helpers to bridge Render MongoDB models to typed frontend interfaces
-function normalizeUser(rawUser: any): User {
+function buildFileUrl(filePath?: string): string {
+  if (!filePath) return '#';
+  if (filePath.startsWith('http://') || filePath.startsWith('https://')) return filePath;
+  const cleaned = filePath.replace(/^\/+/, '');
+  return `${BACKEND_ORIGIN}/${cleaned}`;
+}
+
+export function normalizeUser(rawUser: any): User {
   if (!rawUser) {
     return {
       _id: 'guest',
@@ -16,41 +33,42 @@ function normalizeUser(rawUser: any): User {
       email: 'student@campus.edu',
       role: 'student',
       department: 'General Studies',
-      enrolledCourses: []
+      enrolledCourses: [],
     };
   }
 
   const fName = rawUser.firstName || (rawUser.name ? rawUser.name.split(' ')[0] : 'Student');
   const lName = rawUser.lastName || (rawUser.name ? rawUser.name.split(' ').slice(1).join(' ') : 'Member');
-  
-  // Check if user has uploaded a custom display picture or still has the system default
-  const isDefaultPicture = !rawUser.profilePicture || 
-    rawUser.profilePicture === 'default.jpg' || 
+
+  const isDefaultPicture =
+    !rawUser.profilePicture ||
+    rawUser.profilePicture === 'default.jpg' ||
     rawUser.profilePicture.includes('default') ||
     (rawUser.profilePictureUrl && rawUser.profilePictureUrl.includes('unsplash'));
 
   const avatar = !isDefaultPicture
-    ? (rawUser.profilePictureUrl || `https://project1-1bz0.onrender.com/uploads/profile/${rawUser.profilePicture}`)
+    ? rawUser.profilePictureUrl || `${BACKEND_ORIGIN}/uploads/profile/${rawUser.profilePicture}`
     : DEFAULT_AVATAR;
 
   return {
-    _id: rawUser._id || rawUser.id || 'usr-' + Date.now(),
+    _id: String(rawUser._id || rawUser.id || 'usr-' + Date.now()),
     firstName: fName,
     lastName: lName,
     name: rawUser.fullName || `${fName} ${lName}`.trim(),
     email: rawUser.email || '',
     role: rawUser.role || 'student',
     department: rawUser.department || 'Computer Science',
+    bio: rawUser.bio || '',
     avatarUrl: avatar,
-    avatar: avatar,
-    matricNumber: rawUser.matricNumber || 'STU-2026-089',
+    avatar,
+    matricNumber: rawUser.matricNumber || (rawUser.role === 'instructor' ? 'FAC-CS-01' : 'STU-2026-089'),
     enrolledCourses: Array.isArray(rawUser.enrolledCourses)
-      ? rawUser.enrolledCourses.map((c: any) => (typeof c === 'object' ? c._id || c.id : String(c)))
-      : []
+      ? rawUser.enrolledCourses.map((c: any) => String(typeof c === 'object' ? c._id || c.id : c))
+      : [],
   };
 }
 
-function normalizeCourse(
+export function normalizeCourse(
   rawCourse: any,
   currentUserId?: string,
   userEnrolledList?: string[],
@@ -67,143 +85,241 @@ function normalizeCourse(
         _id: 'inst-1',
         firstName: 'Faculty',
         lastName: 'Member',
-        email: 'faculty@campus.edu'
-      }
+        email: 'faculty@campus.edu',
+        avatar: DEFAULT_AVATAR,
+      },
     };
   }
 
-  const courseId = rawCourse._id || rawCourse.id;
+  const courseId = String(rawCourse._id || rawCourse.id);
   const instructor = rawCourse.instructor;
-  const hasInstructorPic = instructor && (instructor.profilePictureUrl || 
-    (instructor.profilePicture && instructor.profilePicture !== 'default.jpg' && !instructor.profilePicture.includes('default')));
-  const instructorObj = (typeof instructor === 'object' && instructor) ? {
-    _id: instructor._id || instructor.id || 'inst-1',
-    firstName: instructor.firstName || 'Faculty',
-    lastName: instructor.lastName || 'Instructor',
-    email: instructor.email || 'faculty@campus.edu',
-    avatar: hasInstructorPic
-      ? (instructor.profilePictureUrl || `https://project1-1bz0.onrender.com/uploads/profile/${instructor.profilePicture}`)
-      : DEFAULT_AVATAR
-  } : {
-    _id: 'inst-1',
-    firstName: 'Faculty',
-    lastName: 'Member',
-    email: 'faculty@campus.edu',
-    avatar: DEFAULT_AVATAR
-  };
+  const hasInstructorPic =
+    instructor &&
+    (instructor.profilePictureUrl ||
+      (instructor.profilePicture &&
+        instructor.profilePicture !== 'default.jpg' &&
+        !instructor.profilePicture.includes('default')));
+
+  const instructorId =
+    typeof instructor === 'object' && instructor
+      ? String(instructor._id || instructor.id || 'inst-1')
+      : String(instructor || 'inst-1');
+
+  const instructorObj =
+    typeof instructor === 'object' && instructor
+      ? {
+          _id: instructorId,
+          firstName: instructor.firstName || 'Faculty',
+          lastName: instructor.lastName || 'Instructor',
+          email: instructor.email || 'faculty@campus.edu',
+          avatar: hasInstructorPic
+            ? instructor.profilePictureUrl || `${BACKEND_ORIGIN}/uploads/profile/${instructor.profilePicture}`
+            : DEFAULT_AVATAR,
+        }
+      : {
+          _id: instructorId,
+          firstName: 'Faculty',
+          lastName: 'Member',
+          email: 'faculty@campus.edu',
+          avatar: DEFAULT_AVATAR,
+        };
 
   const studentsList = Array.isArray(rawCourse.students) ? rawCourse.students : [];
-  const isInStudents = currentUserId
-    ? studentsList.some((s: any) => (typeof s === 'object' ? s._id === currentUserId : String(s) === String(currentUserId)))
-    : false;
-  const isInUserEnrolled = userEnrolledList ? userEnrolledList.includes(courseId) : false;
-  const isEnrolled = Boolean(rawCourse.isEnrolled || isInStudents || isInUserEnrolled);
-
-  const isInstructorRole = currentUser?.role === 'instructor';
-  const isTeacher = Boolean(
-    (currentUserId && instructorObj._id === currentUserId) ||
-    (currentUser?.email && instructorObj.email && instructorObj.email.toLowerCase() === currentUser.email.toLowerCase()) ||
-    (isInstructorRole && (rawCourse.instructor?._id === currentUserId || rawCourse.instructor === currentUserId || rawCourse.instructor?.email === currentUser?.email))
+  const normalizedStudents = studentsList.map((s: any) =>
+    typeof s === 'object' && s !== null ? normalizeUser(s) : String(s)
   );
 
-  const enrollmentCode = rawCourse.enrollmentCode || rawCourse.code || 'CAMPUS26';
-  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://campus.edu';
-  const joinLink = `${origin}/#join=${enrollmentCode}`;
+  const isInStudents = currentUserId
+    ? normalizedStudents.some((s) =>
+        typeof s === 'object' ? String(s._id) === String(currentUserId) : String(s) === String(currentUserId)
+      )
+    : false;
+  const isInUserEnrolled = userEnrolledList ? userEnrolledList.includes(courseId) : false;
+
+  // Strictly match ownership to THIS course's instructor (or admin)
+  const isCourseOwner = Boolean(
+    (currentUserId && instructorId === String(currentUserId)) ||
+      (currentUser?.email &&
+        instructorObj.email &&
+        instructorObj.email.toLowerCase() === currentUser.email.toLowerCase()) ||
+      currentUser?.role === 'admin'
+  );
+
+  // Instructors cannot be counted as enrolled students in a course they teach
+  const isEnrolled = isCourseOwner ? false : Boolean(rawCourse.isEnrolled || isInStudents || isInUserEnrolled);
+
+  const enrollmentCode = rawCourse.enrollmentCode || '';
+  const origin = typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname}` : 'https://campus.edu/';
+  const joinLink = enrollmentCode ? `${origin}?code=${enrollmentCode}` : '';
 
   return {
     _id: courseId,
     name: rawCourse.name || rawCourse.title || 'Course',
     title: rawCourse.name || rawCourse.title || 'Course',
     code: rawCourse.code || 'CRS100',
-    description: rawCourse.description || 'Course description',
-    color: '#171717',
+    description: rawCourse.description || '',
+    color: rawCourse.color && rawCourse.color.startsWith('#') ? rawCourse.color : '#171717',
     creditUnits: rawCourse.creditUnits || 3,
-    studentsCount: studentsList.length,
+    studentsCount: normalizedStudents.length,
     maxStudents: rawCourse.maxStudents || 60,
+    students: normalizedStudents,
     instructor: instructorObj,
-    department: rawCourse.department || 'Science & Engineering',
+    department: rawCourse.department || 'Computer Science',
     semester: rawCourse.semester || 'Spring 2026',
-    isEnrolled: isTeacher ? false : isEnrolled,
-    isTeaching: isTeacher,
+    isEnrolled,
+    isTeaching: isCourseOwner,
     enrollmentCode,
+    allowEnrollment: rawCourse.allowEnrollment !== false,
+    isArchived: Boolean(rawCourse.isArchived),
     joinLink,
-    syllabus: Array.isArray(rawCourse.syllabus) && rawCourse.syllabus.length > 0 ? rawCourse.syllabus : [
-      { week: 1, topic: 'Introduction and Foundations', details: 'Core terminology, fundamental theories, and course outline.' },
-      { week: 2, topic: 'Core Methodologies & Analysis', details: 'Detailed methodology, derivations, and problem sets.' },
-      { week: 3, topic: 'Real-world Applications & Case Studies', details: 'Applied modeling, group assignments, and practical exercises.' },
-      { week: 4, topic: 'Midterm Review & Assessment', details: 'Comprehensive review and mid-term evaluation.' }
-    ]
+    createdAt: rawCourse.createdAt,
+    syllabus:
+      Array.isArray(rawCourse.syllabus) && rawCourse.syllabus.length > 0
+        ? rawCourse.syllabus
+        : [
+            { week: 1, topic: 'Introduction and Foundations', details: 'Core terminology, fundamental theories, and course outline.' },
+            { week: 2, topic: 'Core Methodologies & Analysis', details: 'Detailed methodology, derivations, and problem sets.' },
+            { week: 3, topic: 'Real-world Applications & Case Studies', details: 'Applied modeling, group assignments, and practical exercises.' },
+            { week: 4, topic: 'Midterm Review & Assessment', details: 'Comprehensive review and mid-term evaluation.' },
+          ],
   };
 }
 
-function normalizeAssignment(rawAssignment: any, currentUserId?: string): Assignment {
-  const courseVal = rawAssignment.course;
-  const courseObj = (typeof courseVal === 'object' && courseVal)
-    ? normalizeCourse(courseVal, currentUserId)
-    : courseVal;
+export function normalizeSubmission(rawSub: any): AssignmentSubmission {
+  const studentObj = typeof rawSub.student === 'object' && rawSub.student ? rawSub.student : null;
+  const sName = studentObj
+    ? `${studentObj.firstName || ''} ${studentObj.lastName || ''}`.trim()
+    : rawSub.studentName || 'Student';
+  const sEmail = studentObj ? studentObj.email || '' : rawSub.studentEmail || '';
 
-  const rawSubs = Array.isArray(rawAssignment.submissions) ? rawAssignment.submissions : [];
-  const submissions = rawSubs.map((s: any) => {
-    const studentObj = typeof s.student === 'object' && s.student ? s.student : null;
-    const sName = studentObj ? `${studentObj.firstName || ''} ${studentObj.lastName || ''}`.trim() : (s.studentName || 'Alex Johnson');
-    const sEmail = studentObj ? studentObj.email : (s.studentEmail || 'alex.johnson@campus.edu');
-    return {
-      student: s.student || 'student-1',
-      studentName: sName || 'Alex Johnson',
-      studentEmail: sEmail || 'alex.johnson@campus.edu',
-      submittedAt: s.submittedAt || new Date().toISOString(),
-      fileUrl: s.fileUrl || s.fileName || 'assignment_solution.py',
-      fileName: s.fileName || 'assignment_solution.py',
-      grade: s.grade,
-      feedback: s.feedback
-    };
-  });
+  const hasPic =
+    studentObj &&
+    (studentObj.profilePictureUrl ||
+      (studentObj.profilePicture &&
+        studentObj.profilePicture !== 'default.jpg' &&
+        !studentObj.profilePicture.includes('default')));
 
-  // Provide realistic student submission for testing instructor grading if empty
-  if (submissions.length === 0 && (rawAssignment.status === 'submitted' || rawAssignment.status === 'graded')) {
-    submissions.push({
-      student: 'stu-alex',
-      studentName: 'Alex Johnson (Student)',
-      studentEmail: 'alex.johnson@campus.edu',
-      submittedAt: new Date(Date.now() - 3600000 * 4).toISOString(),
-      fileName: `${(rawAssignment.title || 'hw').toLowerCase().replace(/[^a-z0-9]/g, '_')}_solution.py`,
-      grade: rawAssignment.grade,
-      feedback: rawAssignment.feedback
-    });
-  }
+  const studentAvatar = hasPic
+    ? studentObj.profilePictureUrl || `${BACKEND_ORIGIN}/uploads/profile/${studentObj.profilePicture}`
+    : DEFAULT_AVATAR;
 
-  const hasSubmitted = currentUserId
-    ? submissions.some((s: any) => {
-        const sId = typeof s.student === 'object' ? s.student?._id : s.student;
-        return String(sId) === String(currentUserId);
-      })
-    : false;
-
-  const courseCode = typeof courseObj === 'object' ? courseObj.code : (rawAssignment.courseCode || 'CSC');
-  const courseName = typeof courseObj === 'object' ? courseObj.name : (rawAssignment.courseName || 'Course');
+  const attachments = Array.isArray(rawSub.attachments)
+    ? rawSub.attachments.map((att: any) => ({
+        fileName: att.fileName || 'Attachment',
+        filePath: att.filePath,
+        fileUrl: att.fileUrl || buildFileUrl(att.filePath),
+        fileType: att.fileType,
+        fileSize: att.fileSize,
+      }))
+    : [];
 
   return {
-    _id: rawAssignment._id || rawAssignment.id,
+    _id: rawSub._id || rawSub.id,
+    assignment: rawSub.assignment,
+    student: studentObj ? normalizeUser(studentObj) : String(rawSub.student || ''),
+    studentName: sName || 'Student',
+    studentEmail: sEmail,
+    studentAvatar,
+    textContent: rawSub.textContent || '',
+    attachments,
+    submittedAt: rawSub.submittedAt || rawSub.createdAt || new Date().toISOString(),
+    status: rawSub.status || (rawSub.grade && rawSub.grade.score !== undefined ? 'graded' : 'submitted'),
+    grade: rawSub.grade,
+    feedback: typeof rawSub.grade === 'object' ? rawSub.grade?.feedback : rawSub.feedback,
+    fileName: attachments[0]?.fileName || rawSub.fileName,
+    fileUrl: attachments[0]?.fileUrl || rawSub.fileUrl,
+    isLate: Boolean(rawSub.isLate),
+  };
+}
+
+export function normalizeAssignment(
+  rawAssignment: any,
+  currentUserId?: string,
+  fetchedSubmissions?: AssignmentSubmission[],
+  currentUser?: User | null
+): Assignment {
+  const courseVal = rawAssignment.course;
+  const courseObj =
+    typeof courseVal === 'object' && courseVal
+      ? normalizeCourse(courseVal, currentUserId, currentUser?.enrolledCourses, currentUser)
+      : courseVal;
+
+  const submissions: AssignmentSubmission[] =
+    fetchedSubmissions !== undefined
+      ? fetchedSubmissions
+      : Array.isArray(rawAssignment.submissions)
+      ? rawAssignment.submissions.map(normalizeSubmission)
+      : [];
+
+  const mySubmission = currentUserId
+    ? submissions.find((s) => {
+        const sId = typeof s.student === 'object' ? s.student?._id : s.student;
+        return String(sId) === String(currentUserId);
+      }) || null
+    : null;
+
+  const isSubmitted = Boolean(mySubmission);
+  const gradeScore =
+    mySubmission?.grade && typeof mySubmission.grade === 'object'
+      ? mySubmission.grade.score
+      : typeof mySubmission?.grade === 'number'
+      ? mySubmission.grade
+      : rawAssignment.grade;
+  const isGraded = Boolean(
+    mySubmission && (mySubmission.status === 'graded' || (gradeScore !== undefined && gradeScore !== null))
+  );
+  const feedbackText =
+    mySubmission?.grade && typeof mySubmission.grade === 'object'
+      ? mySubmission.grade.feedback
+      : mySubmission?.feedback || rawAssignment.feedback;
+
+  const dueDate = rawAssignment.dueDate || new Date(Date.now() + 7 * 86400000).toISOString();
+  const isPastDue = new Date(dueDate).getTime() < Date.now();
+
+  let status: Assignment['status'] = 'pending';
+  if (isGraded) status = 'graded';
+  else if (isSubmitted) status = 'submitted';
+  else if (isPastDue) status = 'missed';
+
+  const ungradedCount = submissions.filter(
+    (s) => s.status !== 'graded' && !(typeof s.grade === 'object' && s.grade?.score !== undefined)
+  ).length;
+
+  const pointsPossible = rawAssignment.pointsPossible ?? rawAssignment.points ?? rawAssignment.totalPoints ?? 100;
+  const courseCode = typeof courseObj === 'object' ? courseObj.code : rawAssignment.courseCode || 'CRS';
+  const courseName = typeof courseObj === 'object' ? courseObj.name : rawAssignment.courseName || 'Course';
+
+  return {
+    _id: String(rawAssignment._id || rawAssignment.id),
     title: rawAssignment.title || 'Assignment',
     description: rawAssignment.description || '',
-    dueDate: rawAssignment.dueDate || new Date(Date.now() + 7 * 86400000).toISOString(),
-    points: rawAssignment.pointsPossible || rawAssignment.points || 100,
-    totalPoints: rawAssignment.pointsPossible || rawAssignment.points || 100,
+    dueDate,
+    points: pointsPossible,
+    pointsPossible,
+    totalPoints: pointsPossible,
+    submissionType: rawAssignment.submissionType || 'both',
+    allowLateSubmissions: Boolean(rawAssignment.allowLateSubmissions),
+    published: rawAssignment.published !== false,
     course: courseObj,
     courseCode,
     courseName,
-    status: hasSubmitted ? (rawAssignment.grade !== undefined ? 'graded' : 'submitted') : (rawAssignment.status || 'pending'),
-    grade: rawAssignment.grade,
-    feedback: rawAssignment.feedback,
-    submissions
+    status,
+    grade: typeof gradeScore === 'number' ? gradeScore : undefined,
+    feedback: feedbackText,
+    mySubmission,
+    submissions,
+    ungradedCount,
+    createdAt: rawAssignment.createdAt,
+    updatedAt: rawAssignment.updatedAt,
   };
 }
 
-function normalizeResource(rawResource: any, currentUserId?: string): Resource {
+function normalizeResource(rawResource: any, currentUserId?: string, currentUser?: User | null): Resource {
   const courseVal = rawResource.course;
-  const courseObj = (typeof courseVal === 'object' && courseVal)
-    ? normalizeCourse(courseVal, currentUserId)
-    : courseVal;
+  const courseObj =
+    typeof courseVal === 'object' && courseVal
+      ? normalizeCourse(courseVal, currentUserId, currentUser?.enrolledCourses, currentUser)
+      : courseVal;
 
   let fileType: 'pdf' | 'slides' | 'archive' | 'doc' = 'pdf';
   const typeStr = (rawResource.file?.fileType || rawResource.fileType || rawResource.type || '').toLowerCase();
@@ -213,7 +329,12 @@ function normalizeResource(rawResource: any, currentUserId?: string): Resource {
     fileType = 'pdf';
   } else if (typeStr.includes('ppt') || typeStr.includes('slide') || nameStr.endsWith('.pptx')) {
     fileType = 'slides';
-  } else if (typeStr.includes('zip') || typeStr.includes('tar') || typeStr.includes('archive') || nameStr.endsWith('.zip')) {
+  } else if (
+    typeStr.includes('zip') ||
+    typeStr.includes('tar') ||
+    typeStr.includes('archive') ||
+    nameStr.endsWith('.zip')
+  ) {
     fileType = 'archive';
   } else if (typeStr.includes('doc') || typeStr.includes('text') || nameStr.endsWith('.docx')) {
     fileType = 'doc';
@@ -221,94 +342,124 @@ function normalizeResource(rawResource: any, currentUserId?: string): Resource {
 
   const rawSize = rawResource.file?.fileSize;
   const fileSize = rawSize
-    ? (rawSize > 1024 * 1024 ? `${(rawSize / (1024 * 1024)).toFixed(1)} MB` : `${Math.round(rawSize / 1024)} KB`)
-    : (rawResource.fileSize || '1.8 MB');
+    ? rawSize > 1024 * 1024
+      ? `${(rawSize / (1024 * 1024)).toFixed(1)} MB`
+      : `${Math.max(1, Math.round(rawSize / 1024))} KB`
+    : rawResource.fileSize || '1.0 MB';
 
   const filePath = rawResource.file?.filePath;
-  const fileUrl = filePath
-    ? (filePath.startsWith('http') ? filePath : `https://project1-1bz0.onrender.com/${filePath}`)
-    : (rawResource.fileUrl || '#');
+  const fileUrl = filePath ? buildFileUrl(filePath) : rawResource.link || rawResource.fileUrl || '#';
 
   const uploader = rawResource.addedBy || rawResource.uploadedBy;
-  const uploadedBy = (typeof uploader === 'object' && uploader) ? {
-    firstName: uploader.firstName || 'Faculty',
-    lastName: uploader.lastName || 'Member',
-    role: uploader.role || 'Instructor'
-  } : {
-    firstName: 'Faculty',
-    lastName: 'Member',
-    role: 'Instructor'
-  };
+  const uploadedBy =
+    typeof uploader === 'object' && uploader
+      ? {
+          _id: String(uploader._id || uploader.id || ''),
+          firstName: uploader.firstName || 'Faculty',
+          lastName: uploader.lastName || 'Member',
+          role: uploader.role || 'Instructor',
+        }
+      : {
+          firstName: 'Faculty',
+          lastName: 'Member',
+          role: 'Instructor',
+        };
 
   return {
-    _id: rawResource._id || rawResource.id,
+    _id: String(rawResource._id || rawResource.id),
     title: rawResource.title || 'Course Resource',
     description: rawResource.description || '',
+    type: rawResource.type || 'file',
+    category: rawResource.category || 'other',
     fileType,
     fileSize,
     fileUrl,
+    link: rawResource.link,
     downloads: rawResource.viewCount || rawResource.downloads || 0,
+    isPinned: Boolean(rawResource.isPinned),
+    isVisible: rawResource.isVisible !== false,
+    likes: Array.isArray(rawResource.likes) ? rawResource.likes.map(String) : [],
+    comments: Array.isArray(rawResource.comments) ? rawResource.comments : [],
     course: courseObj,
     uploadedBy,
     createdAt: rawResource.createdAt ? new Date(rawResource.createdAt).toISOString().split('T')[0] : 'Recently',
-    tags: Array.isArray(rawResource.tags) && rawResource.tags.length > 0 ? rawResource.tags : ['Resource', 'Material']
+    tags: Array.isArray(rawResource.tags) && rawResource.tags.length > 0 ? rawResource.tags : [rawResource.category || 'Material'],
   };
 }
 
-function normalizeDiscussion(rawDisc: any, currentUserId?: string): Discussion {
+function normalizeDiscussion(rawDisc: any, currentUserId?: string, currentUser?: User | null): Discussion {
   const courseVal = rawDisc.course;
-  const courseObj = (typeof courseVal === 'object' && courseVal)
-    ? normalizeCourse(courseVal, currentUserId)
-    : courseVal;
+  const courseObj =
+    typeof courseVal === 'object' && courseVal
+      ? normalizeCourse(courseVal, currentUserId, currentUser?.enrolledCourses, currentUser)
+      : courseVal;
 
   const author = rawDisc.author;
-  const hasAuthorPic = author && (author.profilePictureUrl || 
-    (author.profilePicture && author.profilePicture !== 'default.jpg' && !author.profilePicture.includes('default')));
-  const authorObj = (typeof author === 'object' && author) ? {
-    firstName: author.firstName || 'Student',
-    lastName: author.lastName || '',
-    avatar: hasAuthorPic
-      ? (author.profilePictureUrl || `https://project1-1bz0.onrender.com/uploads/profile/${author.profilePicture}`)
-      : DEFAULT_AVATAR,
-    role: (author.role || 'student') as any
-  } : {
-    firstName: 'Student',
-    lastName: 'Member',
-    avatar: DEFAULT_AVATAR,
-    role: 'student' as const
-  };
+  const hasAuthorPic =
+    author &&
+    (author.profilePictureUrl ||
+      (author.profilePicture &&
+        author.profilePicture !== 'default.jpg' &&
+        !author.profilePicture.includes('default')));
+  const authorObj =
+    typeof author === 'object' && author
+      ? {
+          _id: String(author._id || author.id || ''),
+          firstName: author.firstName || 'Student',
+          lastName: author.lastName || '',
+          avatar: hasAuthorPic
+            ? author.profilePictureUrl || `${BACKEND_ORIGIN}/uploads/profile/${author.profilePicture}`
+            : DEFAULT_AVATAR,
+          role: (author.role || 'student') as any,
+        }
+      : {
+          firstName: 'Student',
+          lastName: 'Member',
+          avatar: DEFAULT_AVATAR,
+          role: 'student' as const,
+        };
 
-  const replies = Array.isArray(rawDisc.replies) ? rawDisc.replies.map((rep: any) => {
-    const repAuthor = rep.author;
-    const hasRepPic = repAuthor && (repAuthor.profilePictureUrl || 
-      (repAuthor.profilePicture && repAuthor.profilePicture !== 'default.jpg' && !repAuthor.profilePicture.includes('default')));
-    return {
-      _id: rep._id || rep.id || 'rep-' + Math.random(),
-      author: (typeof repAuthor === 'object' && repAuthor) ? {
-        firstName: repAuthor.firstName || 'Classmate',
-        lastName: repAuthor.lastName || '',
-        avatar: hasRepPic
-          ? (repAuthor.profilePictureUrl || `https://project1-1bz0.onrender.com/uploads/profile/${repAuthor.profilePicture}`)
-          : DEFAULT_AVATAR,
-        role: (repAuthor.role || 'student') as any
-      } : {
-        firstName: 'Classmate',
-        lastName: '',
-        avatar: DEFAULT_AVATAR,
-        role: 'student' as const
-      },
-      content: rep.content || '',
-      createdAt: rep.createdAt ? new Date(rep.createdAt).toLocaleDateString() : 'Just now',
-      upvotes: rep.upvotes || 0,
-      isAnswer: rep.isAnswer || false
-    };
-  }) : [];
+  const replies = Array.isArray(rawDisc.replies)
+    ? rawDisc.replies.map((rep: any) => {
+        const repAuthor = rep.author;
+        const hasRepPic =
+          repAuthor &&
+          (repAuthor.profilePictureUrl ||
+            (repAuthor.profilePicture &&
+              repAuthor.profilePicture !== 'default.jpg' &&
+              !repAuthor.profilePicture.includes('default')));
+        return {
+          _id: String(rep._id || rep.id || 'rep-' + Math.random()),
+          author:
+            typeof repAuthor === 'object' && repAuthor
+              ? {
+                  _id: String(repAuthor._id || repAuthor.id || ''),
+                  firstName: repAuthor.firstName || 'Classmate',
+                  lastName: repAuthor.lastName || '',
+                  avatar: hasRepPic
+                    ? repAuthor.profilePictureUrl || `${BACKEND_ORIGIN}/uploads/profile/${repAuthor.profilePicture}`
+                    : DEFAULT_AVATAR,
+                  role: (repAuthor.role || 'student') as any,
+                }
+              : {
+                  firstName: 'Classmate',
+                  lastName: '',
+                  avatar: DEFAULT_AVATAR,
+                  role: 'student' as const,
+                },
+          content: rep.content || '',
+          createdAt: rep.createdAt ? new Date(rep.createdAt).toLocaleDateString() : 'Just now',
+          upvotes: rep.upvotes || 0,
+          isAnswer: rep.isAnswer || false,
+        };
+      })
+    : [];
 
-  const courseCode = typeof courseObj === 'object' ? courseObj.code : (rawDisc.courseCode || 'CSC');
-  const courseName = typeof courseObj === 'object' ? courseObj.name : (rawDisc.courseName || 'Course');
+  const courseCode = typeof courseObj === 'object' ? courseObj.code : rawDisc.courseCode || 'CRS';
+  const courseName = typeof courseObj === 'object' ? courseObj.name : rawDisc.courseName || 'Course';
 
   return {
-    _id: rawDisc._id || rawDisc.id,
+    _id: String(rawDisc._id || rawDisc.id),
     title: rawDisc.title || 'Discussion',
     content: rawDisc.content || '',
     course: courseObj,
@@ -316,37 +467,45 @@ function normalizeDiscussion(rawDisc: any, currentUserId?: string): Discussion {
     courseName,
     author: authorObj,
     createdAt: rawDisc.createdAt ? new Date(rawDisc.createdAt).toLocaleDateString() : 'Recently',
+    updatedAt: rawDisc.updatedAt,
     upvotes: rawDisc.upvotes || rawDisc.views || 0,
+    views: rawDisc.views || 0,
     repliesCount: rawDisc.replyCount ?? replies.length,
     tags: Array.isArray(rawDisc.tags) && rawDisc.tags.length > 0 ? rawDisc.tags : ['General'],
     solved: Boolean(rawDisc.solved),
-    replies
+    isPinned: Boolean(rawDisc.isPinned),
+    isLocked: Boolean(rawDisc.isLocked),
+    replies,
   };
 }
 
-function normalizeAnnouncement(rawAnn: any, currentUserId?: string): Announcement {
+function normalizeAnnouncement(rawAnn: any, currentUserId?: string, currentUser?: User | null): Announcement {
   const courseVal = rawAnn.course;
-  const courseObj = (typeof courseVal === 'object' && courseVal)
-    ? normalizeCourse(courseVal, currentUserId)
-    : courseVal;
+  const courseObj =
+    typeof courseVal === 'object' && courseVal
+      ? normalizeCourse(courseVal, currentUserId, currentUser?.enrolledCourses, currentUser)
+      : courseVal;
 
   const author = rawAnn.author || rawAnn.sender;
-  const senderObj = (typeof author === 'object' && author) ? {
-    firstName: author.firstName || 'Campus',
-    lastName: author.lastName || 'Administration',
-    role: author.role || 'Instructor'
-  } : {
-    firstName: 'Campus',
-    lastName: 'Administration',
-    role: 'Administration'
-  };
+  const senderObj =
+    typeof author === 'object' && author
+      ? {
+          firstName: author.firstName || 'Campus',
+          lastName: author.lastName || 'Administration',
+          role: author.role || 'Instructor',
+        }
+      : {
+          firstName: 'Campus',
+          lastName: 'Administration',
+          role: 'Administration',
+        };
 
   return {
-    _id: rawAnn._id || rawAnn.id,
+    _id: String(rawAnn._id || rawAnn.id),
     title: rawAnn.title || 'Campus Announcement',
     content: rawAnn.content || '',
     course: courseObj,
-    courseName: (courseObj && typeof courseObj === 'object') ? courseObj.name : undefined,
+    courseName: courseObj && typeof courseObj === 'object' ? courseObj.name : undefined,
     sender: senderObj,
     senderName: `${senderObj.firstName} ${senderObj.lastName}`.trim(),
     senderRole: senderObj.role,
@@ -354,7 +513,7 @@ function normalizeAnnouncement(rawAnn: any, currentUserId?: string): Announcemen
     createdAt: rawAnn.createdAt,
     date: rawAnn.createdAt
       ? new Date(rawAnn.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-      : 'Today'
+      : 'Today',
   };
 }
 
@@ -432,33 +591,39 @@ class ApiService {
     }
   }
 
-  /**
-   * Helper for authenticated HTTP requests to the Render backend
-   */
-  private async fetchWithAuth(endpoint: string, options: RequestInit = {}): Promise<any> {
+  private async fetchWithAuth(
+    endpoint: string,
+    options: RequestInit & { noContentType?: boolean } = {}
+  ): Promise<any> {
     if (!this.token) {
       throw new Error('Session expired or unauthorized. Please log in.');
     }
 
+    const { noContentType, ...fetchOptions } = options;
     const headers: Record<string, string> = {
-      ...(options.headers as Record<string, string> || {})
+      ...((fetchOptions.headers as Record<string, string>) || {}),
     };
 
     headers['Authorization'] = `Bearer ${this.token}`;
 
-    // Do not set Content-Type if sending FormData (browser auto sets boundary)
-    if (!(options.body instanceof FormData) && !headers['Content-Type']) {
+    if (!noContentType && !(fetchOptions.body instanceof FormData) && !headers['Content-Type']) {
       headers['Content-Type'] = 'application/json';
     }
 
     const res = await fetch(`${API_BASE_URL}${endpoint}`, {
-      ...options,
-      headers
+      ...fetchOptions,
+      headers,
     });
 
     if (res.status === 204) return {};
 
     if (res.status === 401) {
+      // Distinguish between auth session expiration and enrollment code validation 401
+      const errBody = await res.json().catch(() => ({}));
+      const msg = errBody.message || errBody.error || '';
+      if (msg.toLowerCase().includes('enrollment') || endpoint.includes('/courses/enroll')) {
+        throw new Error(msg || 'Invalid enrollment code.');
+      }
       this.logout();
       throw new Error('Session expired or unauthorized. Please log in.');
     }
@@ -471,18 +636,15 @@ class ApiService {
     return data;
   }
 
-  /**
-   * Helper for unauthenticated HTTP requests (e.g., login, signup)
-   */
   private async fetchWithoutAuth(endpoint: string, options: RequestInit = {}): Promise<any> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      ...(options.headers as Record<string, string> || {})
+      ...((options.headers as Record<string, string>) || {}),
     };
 
     const res = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
-      headers
+      headers,
     });
 
     if (res.status === 204) return {};
@@ -495,9 +657,6 @@ class ApiService {
     return data;
   }
 
-  /**
-   * Initialize and restore session, or auto-login with default test account on Render
-   */
   public async initSession(): Promise<User | null> {
     if (this.token) {
       try {
@@ -519,7 +678,7 @@ class ApiService {
   public async login(email: string, password = 'Password123!'): Promise<{ user: User; token: string }> {
     const data = await this.fetchWithoutAuth('/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email, password })
+      body: JSON.stringify({ email, password }),
     });
 
     const token = data.token;
@@ -549,8 +708,8 @@ class ApiService {
         department,
         role,
         password,
-        passwordConfirm: password
-      })
+        passwordConfirm: password,
+      }),
     });
 
     const token = data.token;
@@ -576,7 +735,7 @@ class ApiService {
       const rawList = data.data?.courses || data.courses || [];
       const currentUserId = this.currentUser?._id;
       const userEnrolled = this.currentUser?.enrolledCourses || [];
-      return rawList.map((c: any) => normalizeCourse(c, currentUserId, userEnrolled));
+      return rawList.map((c: any) => normalizeCourse(c, currentUserId, userEnrolled, this.currentUser));
     } catch {
       return [];
     }
@@ -586,29 +745,55 @@ class ApiService {
     const data = await this.fetchWithAuth('/courses/my-courses');
     const rawList = data.data?.courses || data.courses || [];
     const currentUserId = this.currentUser?._id;
-    return rawList.map((c: any) => normalizeCourse(c, currentUserId));
+    const userEnrolled = this.currentUser?.enrolledCourses || [];
+    return rawList.map((c: any) => normalizeCourse(c, currentUserId, userEnrolled, this.currentUser));
   }
 
   public async getCourse(courseId: string): Promise<Course> {
     const data = await this.fetchWithAuth(`/courses/${courseId}`);
     const raw = data.data?.course || data.course;
-    return normalizeCourse(raw, this.currentUser?._id);
+    return normalizeCourse(raw, this.currentUser?._id, this.currentUser?.enrolledCourses, this.currentUser);
   }
 
-  public async enrollCourse(courseId: string, enrollmentCode = 'C65B4T'): Promise<Course[]> {
+  public async enrollCourse(courseId: string, enrollmentCode: string): Promise<Course[]> {
+    if (!this.currentUser) {
+      throw new Error('Please log in to enroll in a course.');
+    }
+    if (this.currentUser.role === 'instructor' || this.currentUser.role === 'admin') {
+      throw new Error('Instructors and administrators cannot enroll in courses as students.');
+    }
+
+    // Double-check course constraints client-side before sending
+    const targetCourse = await this.getCourse(courseId).catch(() => null);
+    if (targetCourse) {
+      if (targetCourse.instructor._id === this.currentUser._id || targetCourse.isTeaching) {
+        throw new Error('An instructor cannot enroll in a course they are teaching.');
+      }
+      if (targetCourse.isArchived) {
+        throw new Error('Cannot enroll in an archived course.');
+      }
+      if (targetCourse.allowEnrollment === false) {
+        throw new Error('This course is not accepting new student enrollments.');
+      }
+    }
+
     await this.fetchWithAuth('/courses/enroll', {
       method: 'POST',
-      body: JSON.stringify({ courseId, enrollmentCode })
+      body: JSON.stringify({ courseId, enrollmentCode: enrollmentCode.trim() }),
     });
 
-    // Refresh courses list from live backend
+    await this.getMe().catch(() => null);
     return await this.getCourses();
   }
 
   public async unenrollCourse(courseId: string): Promise<Course[]> {
+    if (this.currentUser?.role === 'instructor') {
+      throw new Error('Instructors cannot unenroll from a taught course; manage or archive it instead.');
+    }
     await this.fetchWithAuth(`/courses/${courseId}/unenroll`, {
-      method: 'DELETE'
+      method: 'DELETE',
     });
+    await this.getMe().catch(() => null);
     return await this.getCourses();
   }
 
@@ -619,27 +804,153 @@ class ApiService {
     color?: string;
     enrollmentCode?: string;
   }): Promise<Course> {
+    if (this.currentUser?.role !== 'instructor' && this.currentUser?.role !== 'admin') {
+      throw new Error('Only instructors and administrators can create courses.');
+    }
+    const payload: Record<string, any> = {
+      name: courseData.name,
+      code: courseData.code,
+      description: courseData.description,
+      color: courseData.color || '#171717',
+    };
+    if (courseData.enrollmentCode) {
+      payload.enrollmentCode = courseData.enrollmentCode;
+    }
     const data = await this.fetchWithAuth('/courses', {
       method: 'POST',
-      body: JSON.stringify({
-        ...courseData,
-        enrollmentCode: courseData.enrollmentCode || 'ENROLL' + Math.floor(1000 + Math.random() * 9000)
-      })
+      body: JSON.stringify(payload),
     });
     const raw = data.data?.course || data.course;
-    return normalizeCourse(raw, this.currentUser?._id);
+    return normalizeCourse(raw, this.currentUser?._id, this.currentUser?.enrolledCourses, this.currentUser);
   }
 
-  // ===================== ASSIGNMENTS SERVICES =====================
+  public async updateCourse(
+    courseId: string,
+    updateData: {
+      name?: string;
+      code?: string;
+      description?: string;
+      color?: string;
+      enrollmentCode?: string;
+      allowEnrollment?: boolean;
+      isArchived?: boolean;
+    }
+  ): Promise<Course> {
+    if (this.currentUser?.role !== 'instructor' && this.currentUser?.role !== 'admin') {
+      throw new Error('Only the course instructor or admin can modify course settings.');
+    }
+    const data = await this.fetchWithAuth(`/courses/${courseId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updateData),
+    });
+    const raw = data.data?.course || data.course;
+    return normalizeCourse(raw, this.currentUser?._id, this.currentUser?.enrolledCourses, this.currentUser);
+  }
 
-  public async getAssignments(courseId?: string): Promise<Assignment[]> {
+  public async deleteCourse(courseId: string): Promise<void> {
+    if (this.currentUser?.role !== 'instructor' && this.currentUser?.role !== 'admin') {
+      throw new Error('Only the course instructor or admin can delete a course.');
+    }
+    await this.fetchWithAuth(`/courses/${courseId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  public async addStudentToCourse(courseId: string, email: string): Promise<any> {
+    if (this.currentUser?.role !== 'instructor' && this.currentUser?.role !== 'admin') {
+      throw new Error('Only instructors can manually add students.');
+    }
+    if (this.currentUser?.email?.toLowerCase() === email.trim().toLowerCase()) {
+      throw new Error('An instructor cannot enroll themselves in a course they teach.');
+    }
+    return await this.fetchWithAuth(`/courses/${courseId}/students`, {
+      method: 'POST',
+      body: JSON.stringify({ email: email.trim().toLowerCase() }),
+    });
+  }
+
+  public async removeStudentFromCourse(courseId: string, studentId: string): Promise<any> {
+    if (this.currentUser?.role !== 'instructor' && this.currentUser?.role !== 'admin') {
+      throw new Error('Only instructors can remove students.');
+    }
+    return await this.fetchWithAuth(`/courses/${courseId}/students/${studentId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // ===================== COURSE LINKS SERVICES =====================
+
+  public async generateCourseLink(
+    courseId: string,
+    options: { expiresIn?: number; maxUses?: number | null } = {}
+  ): Promise<CourseLink> {
+    if (this.currentUser?.role !== 'instructor' && this.currentUser?.role !== 'admin') {
+      throw new Error('Only the course instructor or admin can generate enrollment links.');
+    }
+    const data = await this.fetchWithAuth(`/courses/${courseId}/links`, {
+      method: 'POST',
+      body: JSON.stringify(options),
+    });
+    return data.data?.courseLink || data.courseLink;
+  }
+
+  public async getCourseLinks(courseId: string): Promise<CourseLink[]> {
+    const data = await this.fetchWithAuth(`/courses/${courseId}/links`);
+    return data.data?.courseLinks || data.courseLinks || [];
+  }
+
+  public async revokeCourseLink(linkId: string): Promise<CourseLink> {
+    const data = await this.fetchWithAuth(`/links/${linkId}/revoke`, {
+      method: 'PATCH',
+      noContentType: true,
+    });
+    return data.data?.courseLink || data.courseLink;
+  }
+
+  public async joinCourseViaLink(token: string): Promise<Course | null> {
+    if (!this.currentUser) {
+      throw new Error('Please log in before joining a course via link.');
+    }
+    if (this.currentUser.role === 'instructor' || this.currentUser.role === 'admin') {
+      throw new Error('Instructors and administrators cannot enroll via student invite links.');
+    }
+    const data = await this.fetchWithAuth(`/join/${token}`, {
+      method: 'POST',
+      noContentType: true,
+    });
+    await this.getMe().catch(() => null);
+    const raw = data.data?.course || data.course;
+    return raw ? normalizeCourse(raw, this.currentUser?._id, this.currentUser?.enrolledCourses, this.currentUser) : null;
+  }
+
+  // ===================== ASSIGNMENTS & SUBMISSIONS SERVICES =====================
+
+  public async getAssignments(courseId?: string, includeSubmissions = true): Promise<Assignment[]> {
     if (!this.token) return [];
     try {
       const endpoint = courseId ? `/courses/${courseId}/assignments` : '/assignments';
       const data = await this.fetchWithAuth(endpoint);
       const rawList = data.data?.assignments || data.assignments || [];
       const currentUserId = this.currentUser?._id;
-      return rawList.map((a: any) => normalizeAssignment(a, currentUserId));
+
+      if (!includeSubmissions || rawList.length === 0) {
+        return rawList.map((a: any) => normalizeAssignment(a, currentUserId, undefined, this.currentUser));
+      }
+
+      const enriched = await Promise.all(
+        rawList.map(async (raw: any) => {
+          const aId = raw._id || raw.id;
+          let subs: AssignmentSubmission[] = [];
+          try {
+            subs = await this.getSubmissions(aId);
+          } catch {
+            subs = [];
+          }
+          return normalizeAssignment(raw, currentUserId, subs, this.currentUser);
+        })
+      );
+
+      return enriched;
     } catch {
       return [];
     }
@@ -648,7 +959,13 @@ class ApiService {
   public async getAssignment(assignmentId: string): Promise<Assignment> {
     const data = await this.fetchWithAuth(`/assignments/${assignmentId}`);
     const raw = data.data?.assignment || data.assignment;
-    return normalizeAssignment(raw, this.currentUser?._id);
+    let subs: AssignmentSubmission[] = [];
+    try {
+      subs = await this.getSubmissions(assignmentId);
+    } catch {
+      subs = [];
+    }
+    return normalizeAssignment(raw, this.currentUser?._id, subs, this.currentUser);
   }
 
   public async createAssignment(assignmentData: {
@@ -656,57 +973,107 @@ class ApiService {
     description: string;
     course: string;
     dueDate: string;
-    points?: number;
-    totalPoints?: number;
+    pointsPossible?: number;
+    submissionType?: 'text' | 'file' | 'both';
+    allowLateSubmissions?: boolean;
   }): Promise<Assignment> {
+    if (this.currentUser?.role !== 'instructor' && this.currentUser?.role !== 'admin') {
+      throw new Error('Only instructors can create assignments.');
+    }
     const payload = {
       title: assignmentData.title,
       description: assignmentData.description,
       course: assignmentData.course,
       dueDate: assignmentData.dueDate,
-      totalPoints: assignmentData.points || assignmentData.totalPoints || 100,
-      points: assignmentData.points || assignmentData.totalPoints || 100
+      pointsPossible: assignmentData.pointsPossible ?? 100,
+      submissionType: assignmentData.submissionType || 'both',
+      allowLateSubmissions: Boolean(assignmentData.allowLateSubmissions),
     };
 
-    let data: any;
-    try {
-      data = await this.fetchWithAuth('/assignments', {
-        method: 'POST',
-        body: JSON.stringify(payload)
-      });
-    } catch {
-      data = await this.fetchWithAuth(`/courses/${assignmentData.course}/assignments`, {
-        method: 'POST',
-        body: JSON.stringify(payload)
-      });
-    }
+    const data = await this.fetchWithAuth('/assignments', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
 
     const raw = data.data?.assignment || data.assignment;
-    return normalizeAssignment(raw, this.currentUser?._id);
+    return normalizeAssignment(raw, this.currentUser?._id, [], this.currentUser);
   }
 
-  public async submitAssignment(assignmentId: string, fileAttachment: string | File): Promise<Assignment> {
-    let body: any;
-    let isFormData = false;
+  public async updateAssignment(
+    assignmentId: string,
+    assignmentData: {
+      title?: string;
+      description?: string;
+      dueDate?: string;
+      pointsPossible?: number;
+      submissionType?: 'text' | 'file' | 'both';
+      allowLateSubmissions?: boolean;
+    }
+  ): Promise<Assignment> {
+    if (this.currentUser?.role !== 'instructor' && this.currentUser?.role !== 'admin') {
+      throw new Error('Only instructors can update assignments.');
+    }
+    const data = await this.fetchWithAuth(`/assignments/${assignmentId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(assignmentData),
+    });
+    const raw = data.data?.assignment || data.assignment;
+    return normalizeAssignment(raw, this.currentUser?._id, undefined, this.currentUser);
+  }
 
-    if (fileAttachment instanceof File) {
-      body = new FormData();
-      body.append('file', fileAttachment);
-      isFormData = true;
-    } else {
-      body = JSON.stringify({
-        fileName: fileAttachment,
-        submittedAt: new Date().toISOString()
+  public async deleteAssignment(assignmentId: string): Promise<void> {
+    if (this.currentUser?.role !== 'instructor' && this.currentUser?.role !== 'admin') {
+      throw new Error('Only instructors can delete assignments.');
+    }
+    await this.fetchWithAuth(`/assignments/${assignmentId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  public async submitAssignment(
+    assignmentId: string,
+    payload: { textContent?: string; files?: File[] }
+  ): Promise<Assignment> {
+    if (this.currentUser?.role === 'instructor') {
+      throw new Error('Instructors cannot submit student assignments.');
+    }
+    const formData = new FormData();
+    if (payload.textContent !== undefined) {
+      formData.append('textContent', payload.textContent);
+    }
+    if (payload.files && payload.files.length > 0) {
+      payload.files.forEach((file) => {
+        formData.append('files', file);
       });
     }
 
     await this.fetchWithAuth(`/assignments/${assignmentId}/submit`, {
       method: 'POST',
-      body,
-      headers: isFormData ? {} : { 'Content-Type': 'application/json' }
+      body: formData,
     });
 
     return await this.getAssignment(assignmentId);
+  }
+
+  public async getSubmissions(assignmentId: string): Promise<AssignmentSubmission[]> {
+    const data = await this.fetchWithAuth(`/assignments/${assignmentId}/submissions`);
+    const rawList = data.data?.submissions || data.submissions || [];
+    return rawList.map(normalizeSubmission);
+  }
+
+  public async gradeSubmission(
+    submissionId: string,
+    gradeData: { score: number; feedback?: string }
+  ): Promise<AssignmentSubmission> {
+    if (this.currentUser?.role !== 'instructor' && this.currentUser?.role !== 'admin') {
+      throw new Error('Only instructors can grade student submissions.');
+    }
+    const data = await this.fetchWithAuth(`/assignments/submissions/${submissionId}/grade`, {
+      method: 'PATCH',
+      body: JSON.stringify(gradeData),
+    });
+    const raw = data.data?.submission || data.submission;
+    return normalizeSubmission(raw);
   }
 
   // ===================== RESOURCES SERVICES =====================
@@ -718,7 +1085,7 @@ class ApiService {
       const data = await this.fetchWithAuth(endpoint);
       const rawList = data.data?.resources || data.resources || [];
       const currentUserId = this.currentUser?._id;
-      return rawList.map((r: any) => normalizeResource(r, currentUserId));
+      return rawList.map((r: any) => normalizeResource(r, currentUserId, this.currentUser));
     } catch {
       return [];
     }
@@ -727,38 +1094,63 @@ class ApiService {
   public async getResource(resourceId: string): Promise<Resource> {
     const data = await this.fetchWithAuth(`/resources/${resourceId}`);
     const raw = data.data?.resource || data.resource;
-    return normalizeResource(raw, this.currentUser?._id);
+    return normalizeResource(raw, this.currentUser?._id, this.currentUser);
   }
 
   public async uploadResource(resourceData: {
     title: string;
     description: string;
     course: string;
+    type?: 'file' | 'link' | 'text';
+    category?: string;
+    link?: string;
     fileType?: string;
     file?: File;
+    isVisible?: boolean;
   }): Promise<Resource> {
     const formData = new FormData();
     formData.append('title', resourceData.title);
-    formData.append('description', resourceData.description);
+    formData.append('description', resourceData.description || '');
+    formData.append('type', resourceData.type || 'file');
+    if (resourceData.category) formData.append('category', resourceData.category);
+    if (resourceData.link) formData.append('link', resourceData.link);
+    if (resourceData.isVisible !== undefined) formData.append('isVisible', String(resourceData.isVisible));
+
     if (resourceData.file) {
       formData.append('file', resourceData.file);
     } else {
-      // Create a dummy text file blob so the backend upload middleware accepts it
-      const blob = new Blob([resourceData.description], { type: 'text/plain' });
-      formData.append('file', blob, `${resourceData.title.toLowerCase().replace(/\s+/g, '-')}.txt`);
+      const stubContent = resourceData.link || resourceData.description || resourceData.title;
+      const blob = new Blob([stubContent], { type: 'application/pdf' });
+      formData.append('file', blob, `${resourceData.title.toLowerCase().replace(/\s+/g, '-')}.pdf`);
     }
 
     const data = await this.fetchWithAuth(`/resources/${resourceData.course}`, {
       method: 'POST',
-      body: formData
+      body: formData,
     });
 
     const raw = data.data?.resource || data.resource;
-    return normalizeResource(raw, this.currentUser?._id);
+    return normalizeResource(raw, this.currentUser?._id, this.currentUser);
+  }
+
+  public async deleteResource(resourceId: string): Promise<void> {
+    await this.fetchWithAuth(`/resources/${resourceId}`, { method: 'DELETE' });
+  }
+
+  public async pinResource(resourceId: string): Promise<any> {
+    return await this.fetchWithAuth(`/resources/${resourceId}/pin`, { method: 'POST', noContentType: true });
+  }
+
+  public async unpinResource(resourceId: string): Promise<any> {
+    return await this.fetchWithAuth(`/resources/${resourceId}/pin`, { method: 'DELETE' });
+  }
+
+  public async recordResourceView(resourceId: string): Promise<any> {
+    return await this.fetchWithAuth(`/resources/${resourceId}/view`, { method: 'POST', noContentType: true });
   }
 
   public async likeResource(resourceId: string): Promise<any> {
-    return await this.fetchWithAuth(`/resources/${resourceId}/like`, { method: 'POST' });
+    return await this.fetchWithAuth(`/resources/${resourceId}/like`, { method: 'POST', noContentType: true });
   }
 
   public async unlikeResource(resourceId: string): Promise<any> {
@@ -768,7 +1160,7 @@ class ApiService {
   public async addResourceComment(resourceId: string, content: string): Promise<any> {
     return await this.fetchWithAuth(`/resources/${resourceId}/comments`, {
       method: 'POST',
-      body: JSON.stringify({ content })
+      body: JSON.stringify({ content }),
     });
   }
 
@@ -781,7 +1173,7 @@ class ApiService {
       const data = await this.fetchWithAuth(endpoint);
       const rawList = data.data?.discussions || data.discussions || [];
       const currentUserId = this.currentUser?._id;
-      return rawList.map((d: any) => normalizeDiscussion(d, currentUserId));
+      return rawList.map((d: any) => normalizeDiscussion(d, currentUserId, this.currentUser));
     } catch {
       return [];
     }
@@ -790,7 +1182,7 @@ class ApiService {
   public async getDiscussion(discussionId: string): Promise<Discussion> {
     const data = await this.fetchWithAuth(`/discussions/${discussionId}`);
     const raw = data.data?.discussion || data.discussion;
-    return normalizeDiscussion(raw, this.currentUser?._id);
+    return normalizeDiscussion(raw, this.currentUser?._id, this.currentUser);
   }
 
   public async createDiscussion(
@@ -805,24 +1197,47 @@ class ApiService {
         title,
         content,
         course: courseId,
-        tags
-      })
+        tags,
+      }),
     });
     const raw = data.data?.discussion || data.discussion;
-    return normalizeDiscussion(raw, this.currentUser?._id);
+    return normalizeDiscussion(raw, this.currentUser?._id, this.currentUser);
+  }
+
+  public async updateDiscussion(
+    discussionId: string,
+    updates: { title?: string; content?: string; isPinned?: boolean; isLocked?: boolean }
+  ): Promise<Discussion> {
+    const data = await this.fetchWithAuth(`/discussions/${discussionId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    });
+    const raw = data.data?.discussion || data.discussion;
+    return normalizeDiscussion(raw, this.currentUser?._id, this.currentUser);
+  }
+
+  public async deleteDiscussion(discussionId: string): Promise<void> {
+    await this.fetchWithAuth(`/discussions/${discussionId}`, {
+      method: 'DELETE',
+    });
   }
 
   public async addReply(discussionId: string, content: string): Promise<Discussion> {
     await this.fetchWithAuth(`/discussions/${discussionId}/replies`, {
       method: 'POST',
-      body: JSON.stringify({ content })
+      body: JSON.stringify({ content }),
     });
     return await this.getDiscussion(discussionId);
   }
 
+  public async deleteReply(discussionId: string, replyId: string): Promise<void> {
+    await this.fetchWithAuth(`/discussions/${discussionId}/replies/${replyId}`, {
+      method: 'DELETE',
+    });
+  }
+
   public async upvoteDiscussion(discussionId: string): Promise<number> {
     try {
-      // Backend records view / upvote
       await this.fetchWithAuth(`/discussions/${discussionId}`, { method: 'GET' });
     } catch {
       // safe fallback
@@ -839,7 +1254,7 @@ class ApiService {
       const data = await this.fetchWithAuth(endpoint);
       const rawList = data.data?.announcements || data.announcements || [];
       const currentUserId = this.currentUser?._id;
-      return rawList.map((ann: any) => normalizeAnnouncement(ann, currentUserId));
+      return rawList.map((ann: any) => normalizeAnnouncement(ann, currentUserId, this.currentUser));
     } catch {
       return [];
     }
@@ -850,12 +1265,15 @@ class ApiService {
     content: string;
     course: string;
   }): Promise<Announcement> {
+    if (this.currentUser?.role !== 'instructor' && this.currentUser?.role !== 'admin') {
+      throw new Error('Only instructors and administrators can create announcements.');
+    }
     const data = await this.fetchWithAuth('/announcements', {
       method: 'POST',
-      body: JSON.stringify(announcementData)
+      body: JSON.stringify(announcementData),
     });
     const raw = data.data?.announcement || data.announcement;
-    return normalizeAnnouncement(raw, this.currentUser?._id);
+    return normalizeAnnouncement(raw, this.currentUser?._id, this.currentUser);
   }
 
   // ===================== USER & SETTINGS SERVICES =====================
@@ -868,7 +1286,20 @@ class ApiService {
   }): Promise<User> {
     const res = await this.fetchWithAuth('/users/updateMe', {
       method: 'PATCH',
-      body: JSON.stringify(data)
+      body: JSON.stringify(data),
+    });
+    const rawUser = res.data?.user || res.user;
+    const user = normalizeUser(rawUser);
+    this.setCurrentUser(user);
+    return user;
+  }
+
+  public async uploadAvatar(file: File): Promise<User> {
+    const formData = new FormData();
+    formData.append('avatar', file);
+    const res = await this.fetchWithAuth('/users/updateAvatar', {
+      method: 'PATCH',
+      body: formData,
     });
     const rawUser = res.data?.user || res.user;
     const user = normalizeUser(rawUser);
@@ -882,8 +1313,8 @@ class ApiService {
       body: JSON.stringify({
         currentPassword,
         newPassword,
-        passwordConfirm: newPassword
-      })
+        passwordConfirm: newPassword,
+      }),
     });
   }
 
@@ -896,18 +1327,25 @@ class ApiService {
         {
           _id: 'sess-current',
           browser: 'Chrome / Web Browser',
-          ipAddress: '127.0.0.1 (Current Session)',
+          ipAddress: 'Current Device',
           lastActive: 'Active Now',
-          isCurrent: true
-        }
+          isCurrent: true,
+        },
       ];
     }
   }
 
   public async revokeSession(sessionId: string): Promise<any> {
     return await this.fetchWithAuth(`/users/sessions/${sessionId}`, {
-      method: 'DELETE'
+      method: 'DELETE',
     });
+  }
+
+  public async deleteAccount(): Promise<void> {
+    await this.fetchWithAuth('/users/deleteMe', {
+      method: 'DELETE',
+    });
+    this.logout();
   }
 }
 
